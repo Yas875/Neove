@@ -1,9 +1,62 @@
 import { CATEGORIES, LOCATIONS, matchPros, triage } from './triage.js';
 import { DEMO_PROS } from './demo-data.js';
+import { SUPABASE_KEY, SUPABASE_URL } from './config.js';
+import { createBackend, toRequestRow } from './backend.js';
 
-const STEPS = ['Demande envoyée', 'Intervenant en route', 'Intervention en cours', 'Intervention terminée'];
+const STEPS = ['Demande enregistrée', 'Intervenant en route', 'Intervention en cours', 'Intervention terminée'];
 const app = document.querySelector('#app');
-const state = { screen: 'photo', photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0 };
+const DRAFT_KEY = 'neove.brouillon';
+const state = {
+  screen: 'photo', photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0,
+  saving: false, saveError: null, loginEmail: null, loginError: null, sending: false, requests: null, listError: null,
+};
+
+function safeStorage() {
+  try { return window.localStorage; } catch {
+    return { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+  }
+}
+const storage = safeStorage();
+const backend = createBackend({ url: SUPABASE_URL, key: SUPABASE_KEY, fetch: (...a) => window.fetch(...a), storage });
+
+function saveDraft() {
+  const { category, symptom, location: place, aFlot, pro } = state;
+  try { storage.setItem(DRAFT_KEY, JSON.stringify({ category, symptom, location: place, aFlot, proId: pro.id })); } catch { /* facultatif */ }
+}
+function clearDraft() { try { storage.removeItem(DRAFT_KEY); } catch { /* rien à effacer */ } }
+function restoreDraft() {
+  try {
+    const d = JSON.parse(storage.getItem(DRAFT_KEY));
+    if (!d) return false;
+    triage(d.category, d.symptom, d.aFlot);
+    const pro = DEMO_PROS.find((p) => p.id === d.proId && p.verified && p.category === d.category);
+    if (!pro || !LOCATIONS.some((l) => l.id === d.location)) throw new Error('Brouillon invalide');
+    Object.assign(state, { category: d.category, symptom: d.symptom, location: d.location, aFlot: Boolean(d.aFlot), pro });
+    return true;
+  } catch { clearDraft(); return false; }
+}
+
+async function submitRequest() {
+  if (state.saving) return;
+  state.saving = true; state.saveError = null; state.step = 0;
+  go('envoi');
+  try {
+    const result = triage(state.category, state.symptom, state.aFlot);
+    await backend.createRequest(toRequestRow(result, state.location, state.aFlot));
+    clearDraft();
+    state.saving = false;
+    go('suivi');
+  } catch (error) {
+    state.saving = false;
+    if (!backend.signedIn) { state.loginError = error.message; go('connexion'); return; }
+    state.saveError = error.message;
+    go('envoi');
+  }
+}
+
+function resetFlow() {
+  Object.assign(state, { photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0, saveError: null });
+}
 
 function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
@@ -15,7 +68,7 @@ function h(tag, props = {}, ...children) {
   el.append(...children.flat().filter((c) => c != null && c !== false));
   return el;
 }
-const go = (screen) => { state.screen = screen; render(); window.scrollTo(0, 0); document.querySelector('h1')?.focus(); };
+const go = (screen) => { if (screen === 'connexion-retour') { state.loginEmail = null; screen = 'connexion'; } state.screen = screen; render(); window.scrollTo(0, 0); document.querySelector('h1')?.focus(); };
 const header = (title, back) => h('header', { class: 'top' },
   back ? h('button', { class: 'back', type: 'button', onclick: () => go(back) }, 'Retour') : h('span', { class: 'brand' }, 'Neove'),
   h('h1', { tabindex: '-1' }, title));
@@ -42,7 +95,8 @@ function photoScreen() {
         state.photo ? h('img', { src: state.photo, alt: 'Photo de la panne' }) : h('span', {}, 'Photographier la panne')),
       input,
       h('p', { class: 'note' }, 'Pendant le pilote, la photo reste sur votre téléphone.'),
-      primary(state.photo ? 'Continuer avec cette photo' : 'Continuer sans photo', () => go('panne'))),
+      primary(state.photo ? 'Continuer avec cette photo' : 'Continuer sans photo', () => go('panne')),
+      backend.signedIn && h('button', { class: 'link', type: 'button', onclick: openRequests }, 'Voir mes demandes')),
   ];
 }
 
@@ -103,7 +157,10 @@ function prosScreen() {
       h('p', { class: 'demo' }, 'Intervenants fictifs : cette version sert de démonstration.'),
       h('ul', { class: 'pros' }, pros.map((p) => h('li', {},
         h('div', {}, h('strong', {}, p.name), h('span', {}, p.distance < 1 ? 'Moins de 1 km à vol d’oiseau' : `${p.distance.toFixed(1).replace('.', ',')} km à vol d’oiseau`)),
-        h('button', { class: 'pick', type: 'button', onclick: () => { state.pro = p; state.step = 0; go('suivi'); } }, 'Choisir'))))),
+        h('button', { class: 'pick', type: 'button', onclick: () => {
+          state.pro = p; saveDraft();
+          if (backend.signedIn) submitRequest(); else { state.loginEmail = null; state.loginError = null; go('connexion'); }
+        } }, 'Choisir'))))),
   ];
 }
 
@@ -112,22 +169,118 @@ function trackScreen() {
   return [
     header(done ? 'Intervention terminée' : 'Suivi de votre demande'),
     h('main', {},
-      h('p', { class: 'demo' }, `Simulation avec ${state.pro.name}. Aucune demande réelle n’a été envoyée.`),
+      h('p', { class: 'demo' }, `Votre demande est enregistrée, mais aucun intervenant n’est prévenu pendant le pilote. Ce suivi avec ${state.pro.name} est une simulation.`),
       h('ol', { class: 'track' }, STEPS.map((s, i) => h('li', {
         class: i < state.step ? 'past' : i === state.step ? 'now' : '', 'aria-current': i === state.step ? 'step' : null,
       }, s))),
       done
-        ? primary('Signaler une autre panne', () => {
-          Object.assign(state, { photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0 });
-          go('photo');
-        })
+        ? primary('Signaler une autre panne', () => { resetFlow(); go('photo'); })
         : primary('Simuler l’étape suivante', () => { state.step += 1; render(); })),
   ];
 }
 
-const screens = { photo: photoScreen, panne: panneScreen, resultat: resultScreen, pros: prosScreen, suivi: trackScreen };
+function loginScreen() {
+  if (state.loginEmail) {
+    return [
+      header('Consultez vos e-mails', 'connexion-retour'),
+      h('main', {},
+        h('p', { class: 'lead' }, `Un lien de connexion a été envoyé à ${state.loginEmail}. Ouvrez-le sur cet appareil et dans ce navigateur pour retrouver votre demande.`),
+        h('p', { class: 'note' }, 'Rien reçu ? Vérifiez vos courriers indésirables.')),
+    ];
+  }
+  const input = h('input', { id: 'email', type: 'email', name: 'email', autocomplete: 'email', required: true, value: '' });
+  return [
+    header('Connectez-vous pour enregistrer la demande', 'pros'),
+    h('main', {},
+      state.loginError && h('p', { class: 'error', role: 'alert' }, state.loginError),
+      h('form', {
+        onsubmit: async (e) => {
+          e.preventDefault();
+          if (state.sending) return;
+          const email = input.value.trim();
+          state.sending = true; state.loginError = null; render();
+          try {
+            await backend.sendLoginLink(email, location.origin + location.pathname);
+            state.loginEmail = email;
+          } catch (error) { state.loginError = error.message; }
+          state.sending = false; render();
+        },
+      },
+      h('label', { class: 'field', for: 'email' }, 'Adresse e-mail'), input,
+      h('button', { class: 'primary', type: 'submit', disabled: state.sending }, state.sending ? 'Envoi en cours' : 'Recevoir le lien de connexion')),
+      h('p', { class: 'note' }, 'Vous recevrez un lien par e-mail : aucun mot de passe à créer.')),
+  ];
+}
+
+function sendingScreen() {
+  if (!state.saveError) return [header('Enregistrement de la demande'), h('main', {}, h('p', { class: 'lead', role: 'status' }, 'Un instant.'))];
+  return [
+    header('La demande n’est pas enregistrée', 'pros'),
+    h('main', {},
+      h('p', { class: 'error', role: 'alert' }, state.saveError),
+      primary('Réessayer', submitRequest)),
+  ];
+}
+
+const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+const STATUS_LABELS = { envoyee: 'Enregistrée', en_route: 'Intervenant en route', en_cours: 'En cours', terminee: 'Terminée', annulee: 'Annulée' };
+
+async function openRequests() {
+  state.requests = null; state.listError = null;
+  go('demandes');
+  try { state.requests = await backend.listRequests(); } catch (error) { state.listError = error.message; }
+  if (!backend.signedIn) { state.loginError = state.listError; state.loginEmail = null; go('connexion'); return; }
+  render();
+}
+
+function requestsScreen() {
+  const describe = (r) => {
+    const category = CATEGORIES.find((c) => c.id === r.category);
+    return {
+      symptom: category?.symptoms.find((s) => s.id === r.symptom)?.label ?? r.symptom,
+      place: LOCATIONS.find((l) => l.id === r.location)?.label ?? r.location,
+    };
+  };
+  return [
+    header('Mes demandes', 'photo'),
+    h('main', {},
+      state.listError && h('p', { class: 'error', role: 'alert' }, state.listError),
+      !state.requests && !state.listError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
+      state.requests?.length === 0 && h('p', { class: 'lead' }, 'Aucune demande pour l’instant. Photographiez une panne pour commencer.'),
+      state.requests?.length > 0 && h('ul', { class: 'pros' }, state.requests.map((r) => {
+        const d = describe(r);
+        return h('li', {}, h('div', {},
+          h('strong', {}, d.symptom),
+          h('span', {}, `${d.place}, ${dateFormat.format(new Date(r.created_at))}`),
+          h('span', {}, `${STATUS_LABELS[r.status] ?? r.status}, ${r.price_min} à ${r.price_max} €`)));
+      })),
+      h('p', { class: 'note' }, `Connecté avec ${backend.email}`),
+      h('button', { class: 'link', type: 'button', onclick: async () => { await backend.signOut(); resetFlow(); go('photo'); } }, 'Se déconnecter')),
+  ];
+}
+
+const screens = {
+  photo: photoScreen, panne: panneScreen, resultat: resultScreen, pros: prosScreen, suivi: trackScreen,
+  connexion: loginScreen, envoi: sendingScreen, demandes: requestsScreen,
+};
 function render() { app.replaceChildren(...screens[state.screen]().flat().filter(Boolean)); }
-render();
+
+async function start() {
+  if (location.hash.length > 1) {
+    const hash = location.hash;
+    history.replaceState(null, '', location.pathname + location.search);
+    let outcome;
+    try { outcome = await backend.consumeRedirect(hash); } catch (error) { outcome = { error: error.message }; }
+    if (outcome.signedIn && restoreDraft()) { submitRequest(); return; }
+    if (outcome.error) {
+      state.loginError = outcome.error;
+      if (restoreDraft()) { go('connexion'); return; }
+      state.screen = 'connexion';
+    }
+  }
+  render();
+}
+start();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

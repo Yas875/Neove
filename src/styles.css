@@ -55,3 +55,8 @@ button:focus-visible, a:focus-visible, .visually-hidden:focus-visible + *, input
 .track .past::before { border-color: var(--blue); background: var(--blue); }
 .track .now { color: var(--ink); font-weight: 800; font-size: 1.3rem; }
 .track .now::before { border-color: var(--ink); background: var(--yellow); }
+.link { display: block; min-height: 44px; margin: .75rem auto 0; padding: 0 .5rem; border: 0; background: none; color: var(--blue); font-weight: 700; text-decoration: underline; cursor: pointer; }
+.lead { margin: 1rem 0 0; font-size: 1.15rem; }
+.field { display: block; margin: 1rem 0 .4rem; font-weight: 700; }
+input[type="email"] { width: 100%; min-height: 54px; padding: 0 .8rem; border: 2px solid var(--line); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; font-size: 1.05rem; }
+.error { margin: 1rem 0 0; padding: .8rem 1rem; border-left: 6px solid var(--red); background: var(--white); font-weight: 600; }

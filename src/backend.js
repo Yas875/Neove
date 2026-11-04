@@ -1,0 +1,134 @@
+// Client Supabase minimal, sans dépendance, pour la connexion par e-mail et les demandes.
+const SESSION_KEY = 'neove.session';
+
+export class BackendError extends Error {
+  constructor(message, status) { super(message); this.status = status; }
+}
+
+function friendly(status) {
+  if (status === 429) return 'Trop de tentatives. Réessayez dans quelques minutes.';
+  if (status === 401 || status === 403) return 'Votre session a expiré. Reconnectez-vous.';
+  return 'Le service a refusé cette action. Réessayez dans un instant.';
+}
+
+export function createBackend({ url, key, fetch: fetcher, storage, now = () => Date.now() }) {
+  async function call(path, { method = 'GET', body, token, headers = {} } = {}) {
+    let res;
+    try {
+      res = await fetcher(`${url}${path}`, {
+        method,
+        headers: {
+          apikey: key,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+          ...headers,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      throw new BackendError('Connexion impossible. Vérifiez votre réseau, puis réessayez.', 0);
+    }
+    if (!res.ok) throw new BackendError(friendly(res.status), res.status);
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  }
+
+  function readSession() {
+    try {
+      const session = JSON.parse(storage.getItem(SESSION_KEY));
+      return session?.access_token ? session : null;
+    } catch { return null; }
+  }
+  function writeSession(session) {
+    try { storage.setItem(SESSION_KEY, JSON.stringify(session)); } catch { /* session limitée à cette page */ }
+    memory = session;
+  }
+  function clearSession() {
+    try { storage.removeItem(SESSION_KEY); } catch { /* rien à effacer */ }
+    memory = null;
+  }
+  let memory = readSession();
+
+  async function validToken() {
+    if (!memory) return null;
+    if (memory.expires_at - now() > 60_000) return memory.access_token;
+    try {
+      const data = await call('/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST', body: { refresh_token: memory.refresh_token },
+      });
+      writeSession({
+        access_token: data.access_token, refresh_token: data.refresh_token,
+        expires_at: now() + data.expires_in * 1000, email: memory.email,
+      });
+      return memory.access_token;
+    } catch (error) {
+      if (error.status >= 400 && error.status < 500 && error.status !== 429) clearSession();
+      throw error;
+    }
+  }
+
+  async function authed(path, options) {
+    const token = await validToken();
+    if (!token) throw new BackendError('Connectez-vous pour continuer.', 401);
+    return call(path, { ...options, token });
+  }
+
+  return {
+    get email() { return memory?.email ?? null; },
+    get signedIn() { return Boolean(memory); },
+
+    sendLoginLink(email, redirectTo) {
+      return call(`/auth/v1/otp?redirect_to=${encodeURIComponent(redirectTo)}`, {
+        method: 'POST', body: { email, create_user: true },
+      });
+    },
+
+    // Lit le retour du lien reçu par e-mail. Le jeton n'est accepté qu'après contrôle par le serveur.
+    async consumeRedirect(hash) {
+      const params = new URLSearchParams(hash.replace(/^#/, ''));
+      if (params.get('error') || params.get('error_code')) {
+        return { error: params.get('error_code') === 'otp_expired'
+          ? 'Ce lien a expiré ou a déjà servi. Demandez-en un nouveau.'
+          : 'La connexion a échoué. Demandez un nouveau lien.' };
+      }
+      const accessToken = params.get('access_token');
+      if (!accessToken) return { ignored: true };
+      const user = await call('/auth/v1/user', { token: accessToken });
+      writeSession({
+        access_token: accessToken, refresh_token: params.get('refresh_token'),
+        expires_at: now() + Number(params.get('expires_in') ?? 3600) * 1000, email: user.email,
+      });
+      return { signedIn: true };
+    },
+
+    async signOut() {
+      const token = memory?.access_token;
+      clearSession();
+      if (token) await call('/auth/v1/logout', { method: 'POST', token }).catch(() => {});
+    },
+
+    async createRequest(request) {
+      const rows = await authed('/rest/v1/requests', {
+        method: 'POST', body: request, headers: { Prefer: 'return=representation' },
+      });
+      return rows[0];
+    },
+
+    listRequests() {
+      return authed('/rest/v1/requests?select=id,category,symptom,location,status,price_min,price_max,created_at&order=created_at.desc&limit=50');
+    },
+  };
+}
+
+// Transforme le résultat du tri en ligne de la table requests.
+export function toRequestRow(result, locationId, afloat) {
+  return {
+    category: result.category.id,
+    symptom: result.symptom.id,
+    location: locationId,
+    afloat,
+    urgency_score: result.score,
+    price_min: result.price.min,
+    price_max: result.price.max,
+  };
+}

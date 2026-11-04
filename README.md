@@ -11,6 +11,10 @@ npm start   # http://localhost:4173
 npm test
 ```
 
+## Réglage de la connexion
+
+Dans Supabase, ouvrez **Authentication → URL Configuration** et ajoutez `http://localhost:4173/` aux **Redirect URLs**, ainsi que l'adresse publique de l'app une fois en ligne.
+
 ## Ce qui est réel et ce qui reste simulé
 
 | Étape | État actuel | Étape suivante |
@@ -19,13 +23,14 @@ npm test
 | Analyse | Règles basées sur les réponses, sans lecture de la photo | Modèle de vision |
 | Prix | Fourchettes illustratives | Validation avec des intervenants |
 | Intervenants | Fictifs | Pros vérifiés de la zone pilote |
-| Suivi | Simulé | Statuts en temps réel |
-| Comptes et données | Tables créées sur Supabase, pas encore utilisées par l'app | Connexion et enregistrement des demandes |
+| Suivi | Simulé, aucun intervenant n'est prévenu | Statuts en temps réel |
+| Comptes et demandes | Réels : connexion par e-mail, demandes enregistrées dans Supabase | Prévenir les intervenants |
 
 ## Organisation
 
 - `src/triage.js` : urgence, prix et matching
 - `src/demo-data.js` : intervenants fictifs
+- `src/backend.js`, `src/config.js` : connexion et demandes via Supabase
 - `src/app.js`, `src/styles.css` : interface
 - `sw.js`, `manifest.webmanifest` : installation et mode hors ligne
 - `supabase/config.toml`, `supabase/migrations/` : configuration et schéma de base de données
