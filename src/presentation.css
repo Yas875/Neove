@@ -15,7 +15,8 @@ a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
 .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(1.5rem, 5vw, 4rem); align-items: stretch; padding: clamp(1.5rem, 5vw, 4rem) clamp(1rem, 4vw, 3rem) clamp(3rem, 7vw, 6rem); }
 .hero-text { align-self: center; }
 .pilot { display: inline-block; margin: 0 0 1rem; padding: .3rem .7rem; background: var(--yellow); border-radius: 4px; font-weight: 700; }
-h1 { max-width: 13ch; margin: 0; font-size: clamp(2.7rem, 5.4vw, 5rem); font-weight: 800; line-height: .98; letter-spacing: -.035em; }
+h1 span { display: block; }
+h1 { margin: 0; font-size: clamp(2.7rem, 4.3vw, 5rem); font-weight: 800; line-height: .98; letter-spacing: -.035em; }
 .lead { max-width: 34rem; margin: 1.5rem 0 0; font-size: clamp(1.15rem, 2vw, 1.4rem); }
 .cta { display: inline-block; margin-top: 2rem; padding: 1.05rem 1.6rem; border-radius: 6px; background: var(--ink); color: var(--white); font-size: 1.1rem; font-weight: 800; text-decoration: none; }
 .flags { display: grid; grid-template-rows: 1.25fr 1fr 1fr; min-height: 30rem; border-radius: 6px; overflow: hidden; }
@@ -52,7 +53,7 @@ p { margin: 0; }
 .danger a:focus-visible { outline-color: var(--white); }
 .foot { padding: 1.5rem clamp(1rem, 4vw, 3rem); color: var(--muted); font-size: .95rem; }
 @media (max-width: 800px) {
-  h1 { font-size: clamp(2.7rem, 12vw, 4.5rem); }
+  h1 { font-size: clamp(2rem, 9.2vw, 4.5rem); }
   .hero, .two { grid-template-columns: 1fr; }
   .flags { min-height: 22rem; }
   .steps, .honest dl { grid-template-columns: 1fr; }
