@@ -12,7 +12,7 @@ function friendly(status) {
 }
 
 export function createBackend({ url, key, fetch: fetcher, storage, now = () => Date.now() }) {
-  async function call(path, { method = 'GET', body, token, headers = {} } = {}) {
+  async function call(path, { method = 'GET', body, rawBody, token, headers = {} } = {}) {
     let res;
     try {
       res = await fetcher(`${url}${path}`, {
@@ -23,7 +23,7 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
           ...(body ? { 'Content-Type': 'application/json' } : {}),
           ...headers,
         },
-        body: body ? JSON.stringify(body) : undefined,
+        body: rawBody ?? (body ? JSON.stringify(body) : undefined),
       });
     } catch {
       throw new BackendError('Connexion impossible. Vérifiez votre réseau, puis réessayez.', 0);
@@ -114,14 +114,40 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
       return rows[0];
     },
 
+    // Envoie la photo dans le dossier privé de l'utilisateur et renvoie son chemin.
+    async uploadPhoto(blob, id = crypto.randomUUID()) {
+      const token = await validToken();
+      if (!token) throw new BackendError('Connectez-vous pour continuer.', 401);
+      const path = `${userIdFromToken(token)}/${id}.jpg`;
+      await call(`/storage/v1/object/request-photos/${path}`, {
+        method: 'POST', rawBody: blob, token, headers: { 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
+      });
+      return path;
+    },
+
+    async analyzePhoto(path) {
+      try {
+        return await authed('/functions/v1/analyze-photo', { method: 'POST', body: { path } });
+      } catch (error) {
+        if (error.status === 429) throw new BackendError('La limite d’analyses du jour est atteinte. Continuez sans analyse.', 429);
+        if (error.status === 401 || error.status === 0) throw error;
+        throw new BackendError('L’analyse de la photo n’est pas disponible pour le moment.', error.status);
+      }
+    },
+
     listRequests() {
       return authed('/rest/v1/requests?select=id,category,symptom,location,status,price_min,price_max,created_at&order=created_at.desc&limit=50');
     },
   };
 }
 
+export function userIdFromToken(token) {
+  const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  return JSON.parse(atob(part)).sub;
+}
+
 // Transforme le résultat du tri en ligne de la table requests.
-export function toRequestRow(result, locationId, afloat) {
+export function toRequestRow(result, locationId, afloat, photoPath = null) {
   return {
     category: result.category.id,
     symptom: result.symptom.id,
@@ -130,5 +156,6 @@ export function toRequestRow(result, locationId, afloat) {
     urgency_score: result.score,
     price_min: result.price.min,
     price_max: result.price.max,
+    photo_path: photoPath,
   };
 }

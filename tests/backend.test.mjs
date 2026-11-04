@@ -69,5 +69,5 @@ test('sans session, aucune demande ne part', async () => {
 });
 test('la ligne envoyée n’impose ni utilisateur ni statut', () => {
   const row = toRequestRow(triage('mecanique', 'bruit', true), 'nice', true);
-  assert.deepEqual(row, { category: 'mecanique', symptom: 'bruit', location: 'nice', afloat: true, urgency_score: 35, price_min: 120, price_max: 600 });
+  assert.deepEqual(row, { category: 'mecanique', symptom: 'bruit', location: 'nice', afloat: true, urgency_score: 35, price_min: 120, price_max: 600, photo_path: null });
 });

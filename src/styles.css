@@ -60,3 +60,7 @@ button:focus-visible, a:focus-visible, .visually-hidden:focus-visible + *, input
 .field { display: block; margin: 1rem 0 .4rem; font-weight: 700; }
 input[type="email"] { width: 100%; min-height: 54px; padding: 0 .8rem; border: 2px solid var(--line); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; font-size: 1.05rem; }
 .error { margin: 1rem 0 0; padding: .8rem 1rem; border-left: 6px solid var(--red); background: var(--white); font-weight: 600; }
+.suggestion { margin-top: .75rem; padding: .9rem 1rem; border-left: 6px solid var(--blue); background: var(--white); }
+.suggestion p { margin: .4rem 0 0; }
+.suggestion-danger { color: var(--red); font-weight: 700; }
+.suggestion-danger a { color: var(--red); font-size: 1.1rem; }

@@ -2,6 +2,7 @@ import { CATEGORIES, LOCATIONS, matchPros, triage } from './triage.js';
 import { DEMO_PROS } from './demo-data.js';
 import { SUPABASE_KEY, SUPABASE_URL } from './config.js';
 import { createBackend, toRequestRow } from './backend.js';
+import { compressPhoto, savePendingPhoto, takePendingPhoto } from './pending-photo.js';
 
 const STEPS = ['Demande enregistrée', 'Intervenant en route', 'Intervention en cours', 'Intervention terminée'];
 const app = document.querySelector('#app');
@@ -9,6 +10,7 @@ const DRAFT_KEY = 'neove.brouillon';
 const state = {
   screen: 'photo', photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0,
   saving: false, saveError: null, loginEmail: null, loginError: null, sending: false, requests: null, listError: null,
+  photoBlob: null, photoPath: null, photoError: null, suggestion: null, analysisError: null, loginBack: 'pros', loginTitle: '',
 };
 
 function safeStorage() {
@@ -20,8 +22,8 @@ const storage = safeStorage();
 const backend = createBackend({ url: SUPABASE_URL, key: SUPABASE_KEY, fetch: (...a) => window.fetch(...a), storage });
 
 function saveDraft() {
-  const { category, symptom, location: place, aFlot, pro } = state;
-  try { storage.setItem(DRAFT_KEY, JSON.stringify({ category, symptom, location: place, aFlot, proId: pro.id })); } catch { /* facultatif */ }
+  const { category, symptom, location: place, aFlot, pro, photoPath } = state;
+  try { storage.setItem(DRAFT_KEY, JSON.stringify({ category, symptom, location: place, aFlot, proId: pro.id, photoPath })); } catch { /* facultatif */ }
 }
 function clearDraft() { try { storage.removeItem(DRAFT_KEY); } catch { /* rien à effacer */ } }
 function restoreDraft() {
@@ -31,7 +33,7 @@ function restoreDraft() {
     triage(d.category, d.symptom, d.aFlot);
     const pro = DEMO_PROS.find((p) => p.id === d.proId && p.verified && p.category === d.category);
     if (!pro || !LOCATIONS.some((l) => l.id === d.location)) throw new Error('Brouillon invalide');
-    Object.assign(state, { category: d.category, symptom: d.symptom, location: d.location, aFlot: Boolean(d.aFlot), pro });
+    Object.assign(state, { category: d.category, symptom: d.symptom, location: d.location, aFlot: Boolean(d.aFlot), pro, photoPath: typeof d.photoPath === 'string' ? d.photoPath : null });
     return true;
   } catch { clearDraft(); return false; }
 }
@@ -42,7 +44,7 @@ async function submitRequest() {
   go('envoi');
   try {
     const result = triage(state.category, state.symptom, state.aFlot);
-    await backend.createRequest(toRequestRow(result, state.location, state.aFlot));
+    await backend.createRequest(toRequestRow(result, state.location, state.aFlot, state.photoPath));
     clearDraft();
     state.saving = false;
     go('suivi');
@@ -55,7 +57,51 @@ async function submitRequest() {
 }
 
 function resetFlow() {
-  Object.assign(state, { photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0, saveError: null });
+  if (state.photo) URL.revokeObjectURL(state.photo);
+  Object.assign(state, {
+    photo: null, photoBlob: null, photoPath: null, photoError: null, suggestion: null, analysisError: null,
+    category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0, saveError: null,
+  });
+}
+
+async function startAnalysis() {
+  if (backend.signedIn) { runAnalysis(); return; }
+  clearDraft();
+  await savePendingPhoto(state.photoBlob);
+  Object.assign(state, { loginEmail: null, loginError: null, loginBack: 'photo', loginTitle: 'Connectez-vous pour analyser la photo' });
+  go('connexion');
+}
+
+async function runAnalysis() {
+  state.analysisError = null;
+  go('analyse');
+  try {
+    state.photoPath ??= await backend.uploadPhoto(state.photoBlob);
+    const analysis = await backend.analyzePhoto(state.photoPath);
+    state.suggestion = analysis;
+    if (analysis.recognized) { state.category = analysis.category; state.symptom = analysis.symptom; }
+    go('panne');
+  } catch (error) {
+    if (!backend.signedIn) {
+      await savePendingPhoto(state.photoBlob);
+      Object.assign(state, { loginEmail: null, loginError: error.message, loginBack: 'photo', loginTitle: 'Connectez-vous pour analyser la photo' });
+      go('connexion');
+      return;
+    }
+    state.analysisError = error.message;
+    go('analyse');
+  }
+}
+
+function analysisScreen() {
+  if (!state.analysisError) return [header('Analyse de la photo'), h('main', {}, h('p', { class: 'lead', role: 'status' }, 'Envoi et analyse en cours.'))];
+  return [
+    header('La photo n’a pas été analysée', 'photo'),
+    h('main', {},
+      h('p', { class: 'error', role: 'alert' }, state.analysisError),
+      primary('Réessayer', runAnalysis),
+      h('button', { class: 'link', type: 'button', onclick: () => { state.suggestion = null; go('panne'); } }, 'Continuer sans analyse')),
+  ];
 }
 
 function h(tag, props = {}, ...children) {
@@ -80,11 +126,14 @@ const primary = (label, onclick, disabled) => h('button', { class: 'primary', ty
 function photoScreen() {
   const input = h('input', {
     id: 'photo', class: 'visually-hidden', type: 'file', accept: 'image/*', capture: 'environment',
-    onchange: (e) => {
+    onchange: async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (state.photo) URL.revokeObjectURL(state.photo);
-      state.photo = URL.createObjectURL(file);
+      try {
+        const blob = await compressPhoto(file);
+        if (state.photo) URL.revokeObjectURL(state.photo);
+        Object.assign(state, { photo: URL.createObjectURL(blob), photoBlob: blob, photoPath: null, photoError: null, suggestion: null });
+      } catch { state.photoError = 'Cette image ne peut pas être lue. Essayez une autre photo.'; }
       render();
     },
   });
@@ -94,10 +143,27 @@ function photoScreen() {
       h('label', { for: 'photo', class: `shot${state.photo ? ' has-photo' : ''}` },
         state.photo ? h('img', { src: state.photo, alt: 'Photo de la panne' }) : h('span', {}, 'Photographier la panne')),
       input,
-      h('p', { class: 'note' }, 'Pendant le pilote, la photo reste sur votre téléphone.'),
-      primary(state.photo ? 'Continuer avec cette photo' : 'Continuer sans photo', () => go('panne')),
+      state.photoError && h('p', { class: 'error', role: 'alert' }, state.photoError),
+      h('p', { class: 'note' }, state.photo
+        ? 'Si vous l’analysez, la photo est conservée sur nos serveurs et transmise à notre prestataire d’IA.'
+        : 'Vous pourrez faire analyser la photo ou décrire la panne vous-même.'),
+      state.photo
+        ? [primary('Analyser la photo', startAnalysis),
+          h('button', { class: 'link', type: 'button', onclick: () => { state.suggestion = null; go('panne'); } }, 'Continuer sans analyse')]
+        : primary('Continuer sans photo', () => go('panne')),
       backend.signedIn && h('button', { class: 'link', type: 'button', onclick: openRequests }, 'Voir mes demandes')),
   ];
+}
+
+function suggestionBox() {
+  const s = state.suggestion;
+  if (!s) return null;
+  return h('div', { class: 'suggestion' },
+    h('strong', {}, s.recognized ? 'Suggestion de l’IA, à vérifier' : 'L’IA n’a pas reconnu la panne'),
+    s.observation && h('p', {}, s.observation),
+    h('p', {}, s.recognized ? 'Corrigez les choix ci-dessous s’ils ne correspondent pas.' : 'Décrivez la panne vous-même ci-dessous.'),
+    s.danger_possible && h('p', { class: 'suggestion-danger', role: 'alert' }, 'Danger possible. Mettez-vous en sécurité. En mer, appelez le ',
+      h('a', { href: 'tel:196' }, '196'), '. À quai, appelez le ', h('a', { href: 'tel:112' }, '112'), '.'));
 }
 
 function panneScreen() {
@@ -106,6 +172,7 @@ function panneScreen() {
   return [
     header('Décrivez la panne', 'photo'),
     h('main', {},
+      suggestionBox(),
       h('h2', {}, 'Type de problème'),
       h('div', { class: 'choices' }, CATEGORIES.map((c) => choice(c.label, c.id === state.category, () => {
         state.category = c.id; state.symptom = null; render();
@@ -142,7 +209,9 @@ function resultScreen() {
         h('dt', {}, 'Constat'), h('dd', {}, r.symptom.label),
         h('dt', {}, 'Métier conseillé'), h('dd', {}, r.category.trade),
         h('dt', {}, 'Prix estimé'), h('dd', {}, `${r.price.min} à ${r.price.max} €`)),
-      h('p', { class: 'note' }, 'Estimation à partir de vos réponses : la photo n’est pas encore analysée et le prix reste indicatif.'),
+      h('p', { class: 'note' }, state.suggestion?.recognized
+        ? 'Estimation à partir de la photo et de vos réponses. Elle ne remplace pas le diagnostic d’un professionnel et le prix reste indicatif.'
+        : 'Estimation à partir de vos réponses. Elle ne remplace pas le diagnostic d’un professionnel et le prix reste indicatif.'),
       primary('Trouver un intervenant', () => go('pros'))),
   ];
 }
@@ -159,7 +228,8 @@ function prosScreen() {
         h('div', {}, h('strong', {}, p.name), h('span', {}, p.distance < 1 ? 'Moins de 1 km à vol d’oiseau' : `${p.distance.toFixed(1).replace('.', ',')} km à vol d’oiseau`)),
         h('button', { class: 'pick', type: 'button', onclick: () => {
           state.pro = p; saveDraft();
-          if (backend.signedIn) submitRequest(); else { state.loginEmail = null; state.loginError = null; go('connexion'); }
+          if (backend.signedIn) submitRequest();
+          else { Object.assign(state, { loginEmail: null, loginError: null, loginBack: 'pros', loginTitle: 'Connectez-vous pour enregistrer la demande' }); go('connexion'); }
         } }, 'Choisir'))))),
   ];
 }
@@ -190,7 +260,7 @@ function loginScreen() {
   }
   const input = h('input', { id: 'email', type: 'email', name: 'email', autocomplete: 'email', required: true, value: '' });
   return [
-    header('Connectez-vous pour enregistrer la demande', 'pros'),
+    header(state.loginTitle || 'Connectez-vous', state.loginBack),
     h('main', {},
       state.loginError && h('p', { class: 'error', role: 'alert' }, state.loginError),
       h('form', {
@@ -261,7 +331,7 @@ function requestsScreen() {
 
 const screens = {
   photo: photoScreen, panne: panneScreen, resultat: resultScreen, pros: prosScreen, suivi: trackScreen,
-  connexion: loginScreen, envoi: sendingScreen, demandes: requestsScreen,
+  connexion: loginScreen, envoi: sendingScreen, demandes: requestsScreen, analyse: analysisScreen,
 };
 function render() { app.replaceChildren(...screens[state.screen]().flat().filter(Boolean)); }
 
@@ -272,6 +342,14 @@ async function start() {
     let outcome;
     try { outcome = await backend.consumeRedirect(hash); } catch (error) { outcome = { error: error.message }; }
     if (outcome.signedIn && restoreDraft()) { submitRequest(); return; }
+    if (outcome.signedIn) {
+      const blob = await takePendingPhoto();
+      if (blob) {
+        Object.assign(state, { photoBlob: blob, photo: URL.createObjectURL(blob) });
+        runAnalysis();
+        return;
+      }
+    }
     if (outcome.error) {
       state.loginError = outcome.error;
       if (restoreDraft()) { go('connexion'); return; }

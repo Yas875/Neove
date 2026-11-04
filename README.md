@@ -15,6 +15,10 @@ npm test
 
 Dans Supabase, ouvrez **Authentication → URL Configuration** et ajoutez `http://localhost:4173/` aux **Redirect URLs**, ainsi que l'adresse publique de l'app une fois en ligne.
 
+## Analyse de la photo
+
+La clé du modèle reste côté serveur, dans le secret Supabase `ANTHROPIC_API_KEY`. La fonction `supabase/functions/analyze-photo` limite chaque compte à 10 analyses par 24 h. Si elle est indisponible, l'utilisateur continue sans analyse.
+
 ## Publication
 
 L'app est prévue pour GitHub Pages, sans étape de build : **Settings → Pages**, source **Deploy from a branch**, branche `main`, dossier `/ (root)`. Adresse attendue : `https://yas875.github.io/Neove/`, à ajouter aussi aux **Redirect URLs** de Supabase.
@@ -25,8 +29,8 @@ Ce site et le dépôt sont publics. Modifier `VERSION` dans `sw.js` à chaque ch
 
 | Étape | État actuel | Étape suivante |
 | --- | --- | --- |
-| Photo | Réelle, conservée sur le téléphone | Stockage sécurisé |
-| Analyse | Règles basées sur les réponses, sans lecture de la photo | Modèle de vision |
+| Photo | Compressée puis stockée dans un espace privé si l'utilisateur demande l'analyse | Accès pour l'intervenant |
+| Analyse | Suggestion du modèle de vision, à confirmer par l'utilisateur | Mesure de la qualité sur de vraies pannes |
 | Prix | Fourchettes illustratives | Validation avec des intervenants |
 | Intervenants | Fictifs | Pros vérifiés de la zone pilote |
 | Suivi | Simulé, aucun intervenant n'est prévenu | Statuts en temps réel |
