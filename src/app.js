@@ -1,4 +1,4 @@
-import { CATEGORIES, LOCATIONS, matchPros, triage } from './triage.js';
+import { CATEGORIES, LOCATIONS, matchPros, triage, urgencyLevel } from './triage.js';
 import { DEMO_PROS } from './demo-data.js';
 import { SUPABASE_KEY, SUPABASE_URL } from './config.js';
 import { createBackend, toRequestRow } from './backend.js';
@@ -10,6 +10,7 @@ const DRAFT_KEY = 'neove.brouillon';
 const state = {
   screen: 'photo', photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0,
   saving: false, saveError: null, loginEmail: null, loginError: null, sending: false, requests: null, listError: null,
+  realPros: null, phone: '', myPro: null, proRequests: null, proError: null, proCurrent: null, proPhoto: null, proBusy: false,
   photoBlob: null, photoPath: null, photoError: null, suggestion: null, analysisError: null, loginBack: 'pros', loginTitle: '',
 };
 
@@ -22,8 +23,8 @@ const storage = safeStorage();
 const backend = createBackend({ url: SUPABASE_URL, key: SUPABASE_KEY, fetch: (...a) => window.fetch(...a), storage });
 
 function saveDraft() {
-  const { category, symptom, location: place, aFlot, pro, photoPath } = state;
-  try { storage.setItem(DRAFT_KEY, JSON.stringify({ category, symptom, location: place, aFlot, proId: pro.id, photoPath })); } catch { /* facultatif */ }
+  const { category, symptom, location: place, aFlot, pro, photoPath, phone } = state;
+  try { storage.setItem(DRAFT_KEY, JSON.stringify({ category, symptom, location: place, aFlot, pro, photoPath, phone })); } catch { /* facultatif */ }
 }
 function clearDraft() { try { storage.removeItem(DRAFT_KEY); } catch { /* rien à effacer */ } }
 function restoreDraft() {
@@ -31,9 +32,9 @@ function restoreDraft() {
     const d = JSON.parse(storage.getItem(DRAFT_KEY));
     if (!d) return false;
     triage(d.category, d.symptom, d.aFlot);
-    const pro = DEMO_PROS.find((p) => p.id === d.proId && p.verified && p.category === d.category);
-    if (!pro || !LOCATIONS.some((l) => l.id === d.location)) throw new Error('Brouillon invalide');
-    Object.assign(state, { category: d.category, symptom: d.symptom, location: d.location, aFlot: Boolean(d.aFlot), pro, photoPath: typeof d.photoPath === 'string' ? d.photoPath : null });
+    const pro = d.pro;
+    if (!pro?.id || !pro.name || pro.category !== d.category || !LOCATIONS.some((l) => l.id === d.location)) throw new Error('Brouillon invalide');
+    Object.assign(state, { category: d.category, symptom: d.symptom, location: d.location, aFlot: Boolean(d.aFlot), pro, photoPath: typeof d.photoPath === 'string' ? d.photoPath : null, phone: typeof d.phone === 'string' ? d.phone : '' });
     return true;
   } catch { clearDraft(); return false; }
 }
@@ -44,10 +45,10 @@ async function submitRequest() {
   go('envoi');
   try {
     const result = triage(state.category, state.symptom, state.aFlot);
-    await backend.createRequest(toRequestRow(result, state.location, state.aFlot, state.photoPath));
+    await backend.createRequest(toRequestRow(result, state.location, state.aFlot, state.photoPath, state.pro.real ? state.pro.id : null, state.pro.real ? state.phone : null));
     clearDraft();
     state.saving = false;
-    go('suivi');
+    go(state.pro.real ? 'envoyee' : 'suivi');
   } catch (error) {
     state.saving = false;
     if (!backend.signedIn) { state.loginError = error.message; go('connexion'); return; }
@@ -60,7 +61,7 @@ function resetFlow() {
   if (state.photo) URL.revokeObjectURL(state.photo);
   Object.assign(state, {
     photo: null, photoBlob: null, photoPath: null, photoError: null, suggestion: null, analysisError: null,
-    category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0, saveError: null,
+    category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0, saveError: null, phone: '',
   });
 }
 
@@ -151,7 +152,13 @@ function photoScreen() {
         ? [primary('Analyser la photo', startAnalysis),
           h('button', { class: 'link', type: 'button', onclick: () => { state.suggestion = null; go('panne'); } }, 'Continuer sans analyse')]
         : primary('Continuer sans photo', () => go('panne')),
-      backend.signedIn && h('button', { class: 'link', type: 'button', onclick: openRequests }, 'Voir mes demandes')),
+      backend.signedIn && h('button', { class: 'link', type: 'button', onclick: openRequests }, 'Voir mes demandes'),
+      state.myPro && h('button', { class: 'link', type: 'button', onclick: openProSpace }, 'Espace intervenant'),
+      !backend.signedIn && h('button', { class: 'link', type: 'button', onclick: () => {
+        clearDraft();
+        Object.assign(state, { loginEmail: null, loginError: null, loginBack: 'photo', loginTitle: 'Connexion intervenant' });
+        go('connexion');
+      } }, 'Accès intervenant')),
   ];
 }
 
@@ -219,18 +226,133 @@ function resultScreen() {
 function prosScreen() {
   const r = triage(state.category, state.symptom, state.aFlot);
   const location = LOCATIONS.find((l) => l.id === state.location);
-  const pros = matchPros(DEMO_PROS, state.category, location);
+  if (state.realPros === null) {
+    state.realPros = [];
+    backend.listPros().then((rows) => { state.realPros = rows; if (state.screen === 'pros') render(); }).catch(() => {});
+  }
+  const real = matchPros(state.realPros, state.category, location).map((p) => ({ ...p, real: true }));
+  const pros = real.length ? real : matchPros(DEMO_PROS, state.category, location);
   return [
     header(`${r.category.trade} près de ${location.label}`, 'resultat'),
     h('main', {},
-      h('p', { class: 'demo' }, 'Intervenants fictifs : cette version sert de démonstration.'),
+      !real.length && h('p', { class: 'demo' }, 'Intervenants fictifs : cette version sert de démonstration.'),
       h('ul', { class: 'pros' }, pros.map((p) => h('li', {},
         h('div', {}, h('strong', {}, p.name), h('span', {}, p.distance < 1 ? 'Moins de 1 km à vol d’oiseau' : `${p.distance.toFixed(1).replace('.', ',')} km à vol d’oiseau`)),
         h('button', { class: 'pick', type: 'button', onclick: () => {
           state.pro = p; saveDraft();
-          if (backend.signedIn) submitRequest();
+          if (p.real) go('contact');
+          else if (backend.signedIn) submitRequest();
           else { Object.assign(state, { loginEmail: null, loginError: null, loginBack: 'pros', loginTitle: 'Connectez-vous pour enregistrer la demande' }); go('connexion'); }
         } }, 'Choisir'))))),
+  ];
+}
+
+function contactScreen() {
+  const input = h('input', { id: 'phone', type: 'tel', autocomplete: 'tel', required: true, minlength: '6', maxlength: '30', value: state.phone });
+  return [
+    header('Comment vous joindre ?', 'pros'),
+    h('main', {}, h('form', {
+      onsubmit: (e) => {
+        e.preventDefault();
+        state.phone = input.value.trim();
+        saveDraft();
+        if (backend.signedIn) submitRequest();
+        else { Object.assign(state, { loginEmail: null, loginError: null, loginBack: 'contact', loginTitle: 'Connectez-vous pour envoyer la demande' }); go('connexion'); }
+      },
+    },
+    h('label', { class: 'field', for: 'phone' }, 'Numéro de téléphone'), input,
+    h('p', { class: 'note' }, `Il sera transmis à ${state.pro.name} pour traiter votre demande.`),
+    h('button', { class: 'primary', type: 'submit' }, 'Envoyer la demande'))),
+  ];
+}
+
+function sentScreen() {
+  return [
+    header('Demande envoyée'),
+    h('main', {},
+      h('p', { class: 'lead' }, `${state.pro.name} peut maintenant la consulter dans son espace.`),
+      h('p', { class: 'note' }, 'Il n’est pas encore prévenu automatiquement. Son état s’affiche dans Mes demandes.'),
+      primary('Voir mes demandes', openRequests)),
+  ];
+}
+
+const PRO_ACTIONS = {
+  envoyee: [['accepter', 'Accepter'], ['refuser', 'Refuser']],
+  en_route: [['commencer', 'Commencer l’intervention'], ['annuler', 'Annuler']],
+  en_cours: [['terminer', 'Terminer l’intervention'], ['annuler', 'Annuler']],
+};
+
+async function openProSpace() {
+  state.proRequests = null; state.proError = null;
+  go('pro');
+  try { state.proRequests = await backend.listProRequests(state.myPro.id); } catch (error) { state.proError = error.message; }
+  if (state.screen === 'pro') render();
+}
+
+function describeRequest(r) {
+  const category = CATEGORIES.find((c) => c.id === r.category);
+  return {
+    symptom: category?.symptoms.find((s) => s.id === r.symptom)?.label ?? r.symptom,
+    place: LOCATIONS.find((l) => l.id === r.location)?.label ?? r.location,
+  };
+}
+
+function proScreen() {
+  return [
+    header(state.myPro.verified ? state.myPro.name : 'Fiche en attente de vérification', 'photo'),
+    h('main', {},
+      !state.myPro.verified && h('p', { class: 'lead' }, 'Vous recevrez des demandes une fois votre fiche vérifiée.'),
+      state.proError && h('p', { class: 'error', role: 'alert' }, state.proError),
+      !state.proRequests && !state.proError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
+      state.proRequests?.length === 0 && state.myPro.verified && h('p', { class: 'lead' }, 'Aucune demande pour l’instant.'),
+      state.proRequests?.length > 0 && h('ul', { class: 'pros' }, state.proRequests.map((r) => {
+        const d = describeRequest(r);
+        return h('li', {},
+          h('div', {}, h('strong', {}, d.symptom), h('span', {}, `${d.place}, ${STATUS_LABELS[r.status] ?? r.status}`)),
+          h('button', { class: 'pick', type: 'button', onclick: () => openProRequest(r) }, 'Ouvrir'));
+      })),
+      h('button', { class: 'link', type: 'button', onclick: openProSpace }, 'Actualiser')),
+  ];
+}
+
+async function openProRequest(request) {
+  if (state.proPhoto) URL.revokeObjectURL(state.proPhoto);
+  Object.assign(state, { proCurrent: request, proPhoto: null, proError: null });
+  go('pro-demande');
+  if (!request.photo_path) return;
+  try {
+    const blob = await backend.fetchPhoto(request.photo_path);
+    if (state.proCurrent?.id === request.id) { state.proPhoto = URL.createObjectURL(blob); render(); }
+  } catch { if (state.proCurrent?.id === request.id) { state.proError = 'La photo ne peut pas être affichée.'; render(); } }
+}
+
+async function runProAction(action) {
+  if (state.proBusy) return;
+  state.proBusy = true; state.proError = null; render();
+  try {
+    const status = await backend.updateProRequest(state.proCurrent.id, action);
+    state.proCurrent = { ...state.proCurrent, status };
+  } catch (error) { state.proError = error.message; }
+  state.proBusy = false; render();
+}
+
+function proRequestScreen() {
+  const r = state.proCurrent;
+  const d = describeRequest(r);
+  return [
+    header(d.symptom, 'pro'),
+    h('main', {},
+      state.proError && h('p', { class: 'error', role: 'alert' }, state.proError),
+      state.proPhoto && h('img', { class: 'pro-photo', src: state.proPhoto, alt: 'Photo envoyée par le plaisancier' }),
+      h('dl', { class: 'facts' },
+        h('dt', {}, 'État'), h('dd', {}, STATUS_LABELS[r.status] ?? r.status),
+        h('dt', {}, 'Lieu'), h('dd', {}, `${d.place}, ${r.afloat ? 'à flot' : 'à terre'}`),
+        h('dt', {}, 'Urgence'), h('dd', {}, urgencyLevel(r.urgency_score).label),
+        h('dt', {}, 'Prix indicatif affiché au client'), h('dd', {}, `${r.price_min} à ${r.price_max} €`),
+        r.contact_phone && r.status !== 'refusee' && [h('dt', {}, 'Téléphone du client'), h('dd', {}, h('a', { href: `tel:${r.contact_phone.replace(/[^+\d]/g, '')}` }, r.contact_phone))]),
+      (PRO_ACTIONS[r.status] ?? []).map(([action, label]) => h('button', {
+        class: action === 'refuser' || action === 'annuler' ? 'secondary' : 'primary', type: 'button', disabled: state.proBusy, onclick: () => runProAction(action),
+      }, label))),
   ];
 }
 
@@ -293,9 +415,10 @@ function sendingScreen() {
 }
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
-const STATUS_LABELS = { envoyee: 'Enregistrée', en_route: 'Intervenant en route', en_cours: 'En cours', terminee: 'Terminée', annulee: 'Annulée' };
+const STATUS_LABELS = { envoyee: 'Enregistrée', en_route: 'Intervenant en route', en_cours: 'En cours', terminee: 'Terminée', annulee: 'Annulée', refusee: 'Refusée' };
 
 async function openRequests() {
+  Object.assign(state, { proError: null });
   state.requests = null; state.listError = null;
   go('demandes');
   try { state.requests = await backend.listRequests(); } catch (error) { state.listError = error.message; }
@@ -325,15 +448,21 @@ function requestsScreen() {
           h('span', {}, `${STATUS_LABELS[r.status] ?? r.status}, ${r.price_min} à ${r.price_max} €`)));
       })),
       h('p', { class: 'note' }, `Connecté avec ${backend.email}`),
-      h('button', { class: 'link', type: 'button', onclick: async () => { await backend.signOut(); resetFlow(); go('photo'); } }, 'Se déconnecter')),
+      h('button', { class: 'link', type: 'button', onclick: async () => { await backend.signOut(); state.myPro = null; resetFlow(); go('photo'); } }, 'Se déconnecter')),
   ];
 }
 
 const screens = {
   photo: photoScreen, panne: panneScreen, resultat: resultScreen, pros: prosScreen, suivi: trackScreen,
   connexion: loginScreen, envoi: sendingScreen, demandes: requestsScreen, analyse: analysisScreen,
+  contact: contactScreen, envoyee: sentScreen, pro: proScreen, 'pro-demande': proRequestScreen,
 };
 function render() { app.replaceChildren(...screens[state.screen]().flat().filter(Boolean)); }
+
+async function loadMyPro() {
+  if (!backend.signedIn) return;
+  try { state.myPro = await backend.getMyPro(); } catch { state.myPro = null; }
+}
 
 async function start() {
   if (location.hash.length > 1) {
@@ -341,6 +470,7 @@ async function start() {
     history.replaceState(null, '', location.pathname + location.search);
     let outcome;
     try { outcome = await backend.consumeRedirect(hash); } catch (error) { outcome = { error: error.message }; }
+    if (outcome.signedIn) await loadMyPro();
     if (outcome.signedIn && restoreDraft()) { submitRequest(); return; }
     if (outcome.signedIn) {
       const blob = await takePendingPhoto();
@@ -349,6 +479,7 @@ async function start() {
         runAnalysis();
         return;
       }
+      if (state.myPro) { openProSpace(); return; }
     }
     if (outcome.error) {
       state.loginError = outcome.error;
@@ -356,6 +487,7 @@ async function start() {
       state.screen = 'connexion';
     }
   }
+  else await loadMyPro();
   render();
 }
 start();

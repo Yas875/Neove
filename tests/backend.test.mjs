@@ -69,5 +69,33 @@ test('sans session, aucune demande ne part', async () => {
 });
 test('la ligne envoyée n’impose ni utilisateur ni statut', () => {
   const row = toRequestRow(triage('mecanique', 'bruit', true), 'nice', true);
-  assert.deepEqual(row, { category: 'mecanique', symptom: 'bruit', location: 'nice', afloat: true, urgency_score: 35, price_min: 120, price_max: 600, photo_path: null });
+  assert.deepEqual(row, { category: 'mecanique', symptom: 'bruit', location: 'nice', afloat: true, urgency_score: 35, price_min: 120, price_max: 600, photo_path: null, pro_id: null, contact_phone: null });
+});
+
+const jwt = `a.${btoa(JSON.stringify({ sub: '11111111-1111-4111-8111-111111111111' }))}.c`;
+const signedIn = async (responses) => {
+  const ctx = setup([{ status: 200, body: { email: 'p@b.fr' } }, ...responses]);
+  await ctx.backend.consumeRedirect(`#access_token=${jwt}&refresh_token=R&expires_in=3600`);
+  return ctx;
+};
+test('la fiche intervenant est cherchée pour le compte connecté', async () => {
+  const { backend, calls } = await signedIn([{ status: 200, body: [{ id: 'p1', name: 'Pro', verified: true }] }]);
+  assert.equal((await backend.getMyPro()).id, 'p1');
+  assert.match(calls.at(-1).url, /user_id=eq\.11111111-1111-4111-8111-111111111111/);
+});
+test('une action d’intervenant passe par la fonction contrôlée', async () => {
+  const { backend, calls } = await signedIn([{ status: 200, body: 'en_route' }]);
+  assert.equal(await backend.updateProRequest('r1', 'accepter'), 'en_route');
+  assert.match(calls.at(-1).url, /\/rest\/v1\/rpc\/pro_update_request$/);
+  assert.deepEqual(JSON.parse(calls.at(-1).body), { p_request_id: 'r1', p_action: 'accepter' });
+});
+test('les fiches publiques se lisent sans jeton', async () => {
+  const { backend, calls } = setup([{ status: 200, body: [] }]);
+  assert.deepEqual(await backend.listPros(), []);
+  assert.equal(calls[0].headers.Authorization, undefined);
+});
+test('une demande vers un vrai pro transmet la fiche et le téléphone', () => {
+  const row = toRequestRow(triage('mecanique', 'bruit', true), 'nice', true, null, 'p1', '0600000000');
+  assert.equal(row.pro_id, 'p1');
+  assert.equal(row.contact_phone, '0600000000');
 });

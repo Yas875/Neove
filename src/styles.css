@@ -64,3 +64,7 @@ input[type="email"] { width: 100%; min-height: 54px; padding: 0 .8rem; border: 2
 .suggestion p { margin: .4rem 0 0; }
 .suggestion-danger { color: var(--red); font-weight: 700; }
 .suggestion-danger a { color: var(--red); font-size: 1.1rem; }
+.secondary { width: 100%; min-height: 52px; margin-top: .75rem; border: 2px solid var(--ink); border-radius: 6px; background: var(--white); color: var(--ink); font-weight: 800; font-size: 1.05rem; cursor: pointer; }
+.secondary:disabled { opacity: .5; cursor: not-allowed; }
+.pro-photo { display: block; width: 100%; max-height: 340px; margin-top: .75rem; border-radius: 6px; object-fit: cover; }
+input[type="tel"] { width: 100%; min-height: 54px; padding: 0 .8rem; border: 2px solid var(--line); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; font-size: 1.05rem; }

@@ -12,7 +12,7 @@ function friendly(status) {
 }
 
 export function createBackend({ url, key, fetch: fetcher, storage, now = () => Date.now() }) {
-  async function call(path, { method = 'GET', body, rawBody, token, headers = {} } = {}) {
+  async function call(path, { method = 'GET', body, rawBody, token, headers = {}, binary = false } = {}) {
     let res;
     try {
       res = await fetcher(`${url}${path}`, {
@@ -29,6 +29,7 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
       throw new BackendError('Connexion impossible. Vérifiez votre réseau, puis réessayez.', 0);
     }
     if (!res.ok) throw new BackendError(friendly(res.status), res.status);
+    if (binary) return res.blob();
     const text = await res.text();
     return text ? JSON.parse(text) : null;
   }
@@ -135,6 +136,30 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
       }
     },
 
+    // Fiches réelles et vérifiées, visibles sans connexion. Une liste vide garde l'app en démonstration.
+    listPros() {
+      return call('/rest/v1/pros?select=id,name,category,lat,lng,phone,verified');
+    },
+
+    async getMyPro() {
+      const token = await validToken();
+      if (!token) return null;
+      const rows = await call(`/rest/v1/pros?select=id,name,verified&user_id=eq.${userIdFromToken(token)}&limit=1`, { token });
+      return rows[0] ?? null;
+    },
+
+    listProRequests(proId) {
+      return authed(`/rest/v1/requests?select=id,category,symptom,location,afloat,urgency_score,price_min,price_max,photo_path,contact_phone,status,created_at&pro_id=eq.${proId}&order=created_at.desc&limit=50`);
+    },
+
+    updateProRequest(requestId, action) {
+      return authed('/rest/v1/rpc/pro_update_request', { method: 'POST', body: { p_request_id: requestId, p_action: action } });
+    },
+
+    async fetchPhoto(path) {
+      return authed(`/storage/v1/object/request-photos/${path}`, { binary: true });
+    },
+
     listRequests() {
       return authed('/rest/v1/requests?select=id,category,symptom,location,status,price_min,price_max,created_at&order=created_at.desc&limit=50');
     },
@@ -147,7 +172,7 @@ export function userIdFromToken(token) {
 }
 
 // Transforme le résultat du tri en ligne de la table requests.
-export function toRequestRow(result, locationId, afloat, photoPath = null) {
+export function toRequestRow(result, locationId, afloat, photoPath = null, proId = null, contactPhone = null) {
   return {
     category: result.category.id,
     symptom: result.symptom.id,
@@ -157,5 +182,7 @@ export function toRequestRow(result, locationId, afloat, photoPath = null) {
     price_min: result.price.min,
     price_max: result.price.max,
     photo_path: photoPath,
+    pro_id: proId,
+    contact_phone: contactPhone,
   };
 }

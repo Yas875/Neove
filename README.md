@@ -19,6 +19,10 @@ Dans Supabase, ouvrez **Authentication → URL Configuration** et ajoutez `http:
 
 La clé du modèle reste côté serveur, dans le secret Supabase `ANTHROPIC_API_KEY`. La fonction `supabase/functions/analyze-photo` limite chaque compte à 10 analyses par 24 h. Si elle est indisponible, l'utilisateur continue sans analyse.
 
+## Espace intervenant
+
+Un intervenant se connecte avec **Accès intervenant**. Un administrateur crée sa fiche vérifiée et y renseigne son `user_id`. Il voit seulement ses demandes et les fait avancer par `pro_update_request`. Il n'est pas encore prévenu automatiquement.
+
 ## Publication
 
 L'app est prévue pour GitHub Pages, sans étape de build : **Settings → Pages**, source **Deploy from a branch**, branche `main`, dossier `/ (root)`. Adresse attendue : `https://yas875.github.io/Neove/`, à ajouter aussi aux **Redirect URLs** de Supabase.
