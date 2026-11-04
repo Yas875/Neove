@@ -20,7 +20,7 @@ npm test
 | Prix | Fourchettes illustratives | Validation avec des intervenants |
 | Intervenants | Fictifs | Pros vérifiés de la zone pilote |
 | Suivi | Simulé | Statuts en temps réel |
-| Comptes et données | Aucun | Migration `supabase/migrations/20261104135200_init.sql`, non appliquée |
+| Comptes et données | Tables créées sur Supabase, pas encore utilisées par l'app | Connexion et enregistrement des demandes |
 
 ## Organisation
 
