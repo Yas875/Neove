@@ -25,7 +25,7 @@ Un intervenant se connecte avec **Accès intervenant**. Un administrateur crée 
 
 ## Conservation des données
 
-Durées provisoires, à faire valider : photos 90 jours, demandes 1 an, compteur d'analyses 30 jours. La fonction `purge-data` applique ces durées et `delete-account` supprime un compte, ses demandes et ses photos.
+Durées provisoires, à faire valider : photos 90 jours, demandes 1 an, compteur d'analyses 30 jours. La fonction `purge-data` applique ces durées chaque nuit et `delete-account` supprime un compte, ses demandes et ses photos.
 
 ## Publication
 

@@ -26,3 +26,25 @@ revoke all on function public.expired_photo_paths(integer) from public, anon, au
 revoke all on function public.purge_expired_rows() from public, anon, authenticated;
 grant execute on function public.expired_photo_paths(integer) to service_role;
 grant execute on function public.purge_expired_rows() to service_role;
+
+create function public.purge_key_matches(p_key text)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select coalesce((select decrypted_secret = p_key from vault.decrypted_secrets where name = 'neove_purge_key'), false);
+$$;
+revoke all on function public.purge_key_matches(text) from public, anon, authenticated;
+grant execute on function public.purge_key_matches(text) to service_role;
+
+-- La clé est générée dans le coffre de la base : elle n'apparaît ni dans le code ni dans les journaux du dépôt.
+select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'neove_purge_key', 'Clé de la suppression planifiée');
+
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select cron.schedule('neove-purge-data', '17 3 * * *', $job$
+  select net.http_post(
+    url := 'https://oupzgfdhssrwkpxqzdoe.supabase.co/functions/v1/purge-data',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-purge-key',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'neove_purge_key')),
+    body := '{}'::jsonb
+  );
+$job$);

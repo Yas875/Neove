@@ -4,7 +4,7 @@ import { handle as purge } from '../supabase/functions/purge-data/lib.js';
 import { handle as removeAccount } from '../supabase/functions/delete-account/lib.js';
 
 const USER = '11111111-1111-4111-8111-111111111111';
-const env = { SUPABASE_URL: 'https://x', SUPABASE_ANON_KEY: 'pub', SUPABASE_SERVICE_ROLE_KEY: 'srv', PURGE_KEY: 'secret' };
+const env = { SUPABASE_URL: 'https://x', SUPABASE_ANON_KEY: 'pub', SUPABASE_SERVICE_ROLE_KEY: 'srv' };
 const json = (b, status = 200) => new Response(JSON.stringify(b), { status });
 const purgeReq = (key) => new Request('https://f/purge', { method: 'POST', headers: key ? { 'x-purge-key': key } : {} });
 
@@ -12,6 +12,7 @@ function purgeBackend({ paths = [], storageOk = true } = {}) {
   const calls = [];
   return { calls, fetcher: async (url, init = {}) => {
     calls.push({ url, ...init });
+    if (url.includes('purge_key_matches')) return json(JSON.parse(init.body).p_key === 'secret');
     if (url.includes('expired_photo_paths')) return json(paths);
     if (url.includes('/storage/')) return storageOk ? json([]) : json({}, 500);
     if (url.includes('/rest/v1/requests')) return json(null, 200);
@@ -22,20 +23,16 @@ test('la suppression planifiée refuse une clé absente ou fausse', async () => 
   for (const key of [undefined, 'faux', 'secreT']) {
     const { calls, fetcher } = purgeBackend();
     assert.equal((await purge(purgeReq(key), env, fetcher)).status, 401);
-    assert.equal(calls.length, 0);
+    assert.equal(calls.some((c) => c.url.includes('expired_photo_paths') || c.url.includes('/storage/')), false);
   }
-});
-test('la clé vide ne déverrouille jamais la fonction', async () => {
-  const { fetcher } = purgeBackend();
-  assert.equal((await purge(purgeReq(), { ...env, PURGE_KEY: '' }, fetcher)).status, 503);
 });
 test('les photos sont supprimées avant de retirer leur référence', async () => {
   const { calls, fetcher } = purgeBackend({ paths: [`${USER}/a.jpg`] });
   const res = await purge(purgeReq('secret'), env, fetcher);
   assert.deepEqual(await res.json(), { photos: 1, requests: 2 });
   const order = calls.map((c) => (c.url.includes('/storage/') ? 'files' : c.url.includes('/rest/v1/requests') ? 'ref' : 'rpc'));
-  assert.deepEqual(order, ['rpc', 'files', 'ref', 'rpc']);
-  assert.ok(decodeURIComponent(calls[2].url).includes(`"${USER}/a.jpg"`));
+  assert.deepEqual(order, ['rpc', 'rpc', 'files', 'ref', 'rpc']);
+  assert.ok(decodeURIComponent(calls[3].url).includes(`"${USER}/a.jpg"`));
 });
 test('un échec de stockage laisse les références en place', async () => {
   const { calls, fetcher } = purgeBackend({ paths: ['a'], storageOk: false });
