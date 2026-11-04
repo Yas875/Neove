@@ -1,6 +1,6 @@
 // Cache hors ligne. Changer VERSION à chaque modification des fichiers listés.
-const VERSION = 'neove-v10';
-const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'src/app.js', 'src/triage.js', 'src/demo-data.js', 'src/config.js', 'src/pending-photo.js', 'src/backend.js', 'src/styles.css', 'presentation.html', 'src/presentation.css'];
+const VERSION = 'neove-v11';
+const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'src/app.js', 'src/triage.js', 'src/demo-data.js', 'src/config.js', 'src/pending-photo.js', 'src/backend.js', 'src/styles.css', 'presentation.html', 'src/presentation.css', 'src/presentation.js', 'src/pro-lead.js'];
 self.addEventListener('install', (e) => e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', (e) => e.waitUntil(caches.keys()
   .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))

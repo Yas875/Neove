@@ -52,7 +52,28 @@ p { margin: 0; }
 .danger a { color: var(--white); font-weight: 800; font-size: 1.3rem; }
 .danger a:focus-visible { outline-color: var(--white); }
 .foot { padding: 1.5rem clamp(1rem, 4vw, 3rem); color: var(--muted); font-size: .95rem; }
+button.cta { border: 0; cursor: pointer; font-family: inherit; }
+button.cta:disabled { opacity: .7; cursor: wait; }
+.pro-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.25rem; max-width: 46rem; margin-top: 2.5rem; }
+.pro-form[hidden] { display: none; }
+.pro-form h3, .form-note, .field-wide, .pro-form button { grid-column: 1 / -1; }
+.pro-form button { justify-self: start; margin-top: 0; }
+.field label { display: block; margin-bottom: .35rem; font-weight: 700; }
+.field input, .field select, .field textarea { width: 100%; min-height: 50px; padding: .7rem .8rem; border: 2px solid var(--line); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; }
+.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+.pros .form-note { margin: 0; font-size: .95rem; }
+.hp { position: absolute; left: -9999px; }
+.form-status { margin: 0; }
+.form-status:empty { display: none; }
+.pros .form-status { max-width: 46rem; margin-top: 1.25rem; padding: .8rem 1rem; border-radius: 6px; font-weight: 700; }
+.form-status:focus { outline: none; }
+.form-status.is-ok { background: var(--yellow); color: var(--ink); }
+.form-status.is-error { background: var(--white); color: var(--red); }
+.pros .pro-access { margin-top: 1.5rem; font-size: 1rem; }
+.pro-access a { color: var(--white); font-weight: 700; }
+.pro-access a:focus-visible { outline-color: var(--yellow); }
 @media (max-width: 800px) {
+  .pro-form { grid-template-columns: 1fr; }
   h1 { font-size: clamp(2rem, 9.2vw, 4.5rem); }
   .hero, .two { grid-template-columns: 1fr; }
   .flags { min-height: 22rem; }

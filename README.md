@@ -27,6 +27,10 @@ Un intervenant se connecte avec **Accès intervenant**. Un administrateur crée 
 
 Durées provisoires, à faire valider : photos 90 jours, demandes 1 an, compteur d'analyses 30 jours. La fonction `purge-data` applique ces durées chaque nuit et `delete-account` supprime un compte, ses demandes et ses photos.
 
+## Contacts des professionnels
+
+Le formulaire de `presentation.html` enregistre les demandes dans `pro_leads`. Seul l'administrateur peut les lire, depuis l'éditeur de tables de Supabase. Elles sont conservées 1 an au maximum, durée provisoire.
+
 ## Publication
 
 L'app est prévue pour GitHub Pages, sans étape de build : **Settings → Pages**, source **Deploy from a branch**, branche `main`, dossier `/ (root)`. Adresse attendue : `https://yas875.github.io/Neove/`, à ajouter aussi aux **Redirect URLs** de Supabase.

@@ -38,7 +38,7 @@ grant execute on function public.purge_key_matches(text) to service_role;
 select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'neove_purge_key', 'Clé de la suppression planifiée');
 
 create extension if not exists pg_cron;
-create extension if not exists pg_net;
+create extension if not exists pg_net schema extensions;
 
 select cron.schedule('neove-purge-data', '17 3 * * *', $job$
   select net.http_post(
