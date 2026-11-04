@@ -1,5 +1,5 @@
 // Client Supabase minimal, sans dépendance, pour la connexion par e-mail et les demandes.
-const SESSION_KEY = 'azurio.session';
+const SESSION_KEY = 'neove.session';
 
 export class BackendError extends Error {
   constructor(message, status) { super(message); this.status = status; }

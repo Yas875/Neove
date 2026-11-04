@@ -1,6 +1,4 @@
-# Azurio : pilote nautisme
-
-Anciennement Neove. Le dépôt GitHub et l'adresse du site gardent ce nom tant que le dépôt n'est pas renommé.
+# Neove : pilote nautisme
 
 Application web installable sur téléphone : photographier une panne à bord, connaître son urgence et un prix indicatif, choisir un intervenant proche, puis suivre l'intervention. Zone pilote : Nice, Saint-Augustin, Carros et Antibes.
 

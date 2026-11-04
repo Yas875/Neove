@@ -5,7 +5,7 @@ import { createBackend, toRequestRow } from './backend.js';
 
 const STEPS = ['Demande enregistrée', 'Intervenant en route', 'Intervention en cours', 'Intervention terminée'];
 const app = document.querySelector('#app');
-const DRAFT_KEY = 'azurio.brouillon';
+const DRAFT_KEY = 'neove.brouillon';
 const state = {
   screen: 'photo', photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0,
   saving: false, saveError: null, loginEmail: null, loginError: null, sending: false, requests: null, listError: null,
@@ -70,7 +70,7 @@ function h(tag, props = {}, ...children) {
 }
 const go = (screen) => { if (screen === 'connexion-retour') { state.loginEmail = null; screen = 'connexion'; } state.screen = screen; render(); window.scrollTo(0, 0); document.querySelector('h1')?.focus(); };
 const header = (title, back) => h('header', { class: 'top' },
-  back ? h('button', { class: 'back', type: 'button', onclick: () => go(back) }, 'Retour') : h('span', { class: 'brand' }, 'Azurio'),
+  back ? h('button', { class: 'back', type: 'button', onclick: () => go(back) }, 'Retour') : h('span', { class: 'brand' }, 'Neove'),
   h('h1', { tabindex: '-1' }, title));
 const choice = (label, selected, onclick) => h('button', {
   class: `choice${selected ? ' is-on' : ''}`, type: 'button', 'aria-pressed': String(Boolean(selected)), onclick,
