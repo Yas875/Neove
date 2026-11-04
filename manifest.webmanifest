@@ -1,0 +1,12 @@
+{
+  "name": "Neove",
+  "short_name": "Neove",
+  "description": "Dépannage nautique sur Nice-Antibes",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef6f6",
+  "theme_color": "#06284a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
