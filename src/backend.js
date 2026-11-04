@@ -102,6 +102,11 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
       return { signedIn: true };
     },
 
+    async deleteAccount() {
+      await authed('/functions/v1/delete-account', { method: 'POST', body: {} });
+      clearSession();
+    },
+
     async signOut() {
       const token = memory?.access_token;
       clearSession();

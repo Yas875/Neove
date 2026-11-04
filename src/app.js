@@ -10,7 +10,7 @@ const DRAFT_KEY = 'neove.brouillon';
 const state = {
   screen: 'photo', photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0,
   saving: false, saveError: null, loginEmail: null, loginError: null, sending: false, requests: null, listError: null,
-  realPros: null, phone: '', myPro: null, proRequests: null, proError: null, proCurrent: null, proPhoto: null, proBusy: false,
+  deleting: false, deleteError: null, accountDeleted: false, realPros: null, phone: '', myPro: null, proRequests: null, proError: null, proCurrent: null, proPhoto: null, proBusy: false,
   photoBlob: null, photoPath: null, photoError: null, suggestion: null, analysisError: null, loginBack: 'pros', loginTitle: '',
 };
 
@@ -144,9 +144,10 @@ function photoScreen() {
       h('label', { for: 'photo', class: `shot${state.photo ? ' has-photo' : ''}` },
         state.photo ? h('img', { src: state.photo, alt: 'Photo de la panne' }) : h('span', {}, 'Photographier la panne')),
       input,
+      state.accountDeleted && h('p', { class: 'lead', role: 'status' }, 'Votre compte a été supprimé.'),
       state.photoError && h('p', { class: 'error', role: 'alert' }, state.photoError),
       h('p', { class: 'note' }, state.photo
-        ? 'Si vous l’analysez, la photo est conservée sur nos serveurs et transmise à notre prestataire d’IA.'
+        ? 'Si vous l’analysez, la photo est transmise à notre prestataire d’IA et conservée 90 jours au maximum. Elle peut être vue par l’intervenant choisi.'
         : 'Vous pourrez faire analyser la photo ou décrire la panne vous-même.'),
       state.photo
         ? [primary('Analyser la photo', startAnalysis),
@@ -261,7 +262,7 @@ function contactScreen() {
       },
     },
     h('label', { class: 'field', for: 'phone' }, 'Numéro de téléphone'), input,
-    h('p', { class: 'note' }, `Il sera transmis à ${state.pro.name} pour traiter votre demande.`),
+    h('p', { class: 'note' }, `Il sera transmis à ${state.pro.name} pour traiter votre demande, et conservé avec elle 1 an au maximum.`),
     h('button', { class: 'primary', type: 'submit' }, 'Envoyer la demande'))),
   ];
 }
@@ -353,6 +354,26 @@ function proRequestScreen() {
       (PRO_ACTIONS[r.status] ?? []).map(([action, label]) => h('button', {
         class: action === 'refuser' || action === 'annuler' ? 'secondary' : 'primary', type: 'button', disabled: state.proBusy, onclick: () => runProAction(action),
       }, label))),
+  ];
+}
+
+function deleteAccountScreen() {
+  return [
+    header('Supprimer votre compte ?', 'demandes'),
+    h('main', {},
+      state.deleteError && h('p', { class: 'error', role: 'alert' }, state.deleteError),
+      h('p', { class: 'lead' }, 'Votre compte, vos demandes et vos photos seront supprimés définitivement. Cette action ne peut pas être annulée.'),
+      state.myPro && h('p', { class: 'note' }, 'Votre fiche d’intervenant ne sera plus proposée aux plaisanciers.'),
+      h('button', { class: 'primary danger-action', type: 'button', disabled: state.deleting, onclick: async () => {
+        state.deleting = true; state.deleteError = null; render();
+        try {
+          await backend.deleteAccount();
+          clearDraft(); await takePendingPhoto();
+          state.myPro = null; resetFlow(); state.deleting = false; state.accountDeleted = true;
+          go('photo');
+        } catch (error) { state.deleting = false; state.deleteError = error.message; render(); }
+      } }, state.deleting ? 'Suppression en cours' : 'Supprimer définitivement'),
+      h('button', { class: 'secondary', type: 'button', disabled: state.deleting, onclick: () => go('demandes') }, 'Garder mon compte')),
   ];
 }
 
@@ -448,14 +469,15 @@ function requestsScreen() {
           h('span', {}, `${STATUS_LABELS[r.status] ?? r.status}, ${r.price_min} à ${r.price_max} €`)));
       })),
       h('p', { class: 'note' }, `Connecté avec ${backend.email}`),
-      h('button', { class: 'link', type: 'button', onclick: async () => { await backend.signOut(); state.myPro = null; resetFlow(); go('photo'); } }, 'Se déconnecter')),
+      h('button', { class: 'link', type: 'button', onclick: async () => { await backend.signOut(); state.myPro = null; resetFlow(); go('photo'); } }, 'Se déconnecter'),
+      h('button', { class: 'link link-danger', type: 'button', onclick: () => { state.deleteError = null; go('supprimer'); } }, 'Supprimer mon compte')),
   ];
 }
 
 const screens = {
   photo: photoScreen, panne: panneScreen, resultat: resultScreen, pros: prosScreen, suivi: trackScreen,
   connexion: loginScreen, envoi: sendingScreen, demandes: requestsScreen, analyse: analysisScreen,
-  contact: contactScreen, envoyee: sentScreen, pro: proScreen, 'pro-demande': proRequestScreen,
+  supprimer: deleteAccountScreen, contact: contactScreen, envoyee: sentScreen, pro: proScreen, 'pro-demande': proRequestScreen,
 };
 function render() { app.replaceChildren(...screens[state.screen]().flat().filter(Boolean)); }
 

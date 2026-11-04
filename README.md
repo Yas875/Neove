@@ -23,6 +23,10 @@ La clé du modèle reste côté serveur, dans le secret Supabase `ANTHROPIC_API_
 
 Un intervenant se connecte avec **Accès intervenant**. Un administrateur crée sa fiche vérifiée et y renseigne son `user_id`. Il voit seulement ses demandes et les fait avancer par `pro_update_request`. Il n'est pas encore prévenu automatiquement.
 
+## Conservation des données
+
+Durées provisoires, à faire valider : photos 90 jours, demandes 1 an, compteur d'analyses 30 jours. La fonction `purge-data` applique ces durées et `delete-account` supprime un compte, ses demandes et ses photos.
+
 ## Publication
 
 L'app est prévue pour GitHub Pages, sans étape de build : **Settings → Pages**, source **Deploy from a branch**, branche `main`, dossier `/ (root)`. Adresse attendue : `https://yas875.github.io/Neove/`, à ajouter aussi aux **Redirect URLs** de Supabase.

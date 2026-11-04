@@ -68,3 +68,5 @@ input[type="email"] { width: 100%; min-height: 54px; padding: 0 .8rem; border: 2
 .secondary:disabled { opacity: .5; cursor: not-allowed; }
 .pro-photo { display: block; width: 100%; max-height: 340px; margin-top: .75rem; border-radius: 6px; object-fit: cover; }
 input[type="tel"] { width: 100%; min-height: 54px; padding: 0 .8rem; border: 2px solid var(--line); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; font-size: 1.05rem; }
+.link-danger { color: var(--red); }
+.danger-action { background: var(--red); }
