@@ -20,7 +20,7 @@ npm test
 | Prix | Fourchettes illustratives | Validation avec des intervenants |
 | Intervenants | Fictifs | Pros vérifiés de la zone pilote |
 | Suivi | Simulé | Statuts en temps réel |
-| Comptes et données | Aucun | Migration `supabase/migrations/0001_init.sql`, non appliquée |
+| Comptes et données | Aucun | Migration `supabase/migrations/20261104135200_init.sql`, non appliquée |
 
 ## Organisation
 
@@ -28,4 +28,4 @@ npm test
 - `src/demo-data.js` : intervenants fictifs
 - `src/app.js`, `src/styles.css` : interface
 - `sw.js`, `manifest.webmanifest` : installation et mode hors ligne
-- `supabase/migrations/` : schéma de base de données
+- `supabase/config.toml`, `supabase/migrations/` : configuration et schéma de base de données
