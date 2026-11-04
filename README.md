@@ -15,6 +15,12 @@ npm test
 
 Dans Supabase, ouvrez **Authentication → URL Configuration** et ajoutez `http://localhost:4173/` aux **Redirect URLs**, ainsi que l'adresse publique de l'app une fois en ligne.
 
+## Publication
+
+L'app est prévue pour GitHub Pages, sans étape de build : **Settings → Pages**, source **Deploy from a branch**, branche `main`, dossier `/ (root)`. Adresse attendue : `https://yas875.github.io/Neove/`, à ajouter aussi aux **Redirect URLs** de Supabase.
+
+Ce site et le dépôt sont publics. Modifier `VERSION` dans `sw.js` à chaque changement d'un fichier en cache, sinon les téléphones garderont l'ancienne version.
+
 ## Ce qui est réel et ce qui reste simulé
 
 | Étape | État actuel | Étape suivante |
