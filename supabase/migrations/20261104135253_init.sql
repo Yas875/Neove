@@ -1,4 +1,4 @@
--- Schéma du pilote Neove.
+-- Schéma du pilote Azurio.
 create type public.request_status as enum ('envoyee', 'en_route', 'en_cours', 'terminee', 'annulee');
 
 create table public.pros (
