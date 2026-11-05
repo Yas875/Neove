@@ -551,7 +551,7 @@ function accountScreen() {
   return [
     header(state.profile?.full_name || 'Mon compte', 'photo'),
     h('main', {},
-      h('div', { class: 'account-id' }, avatar(state.profile?.full_name ?? backend.email ?? '', state.profile?.avatar_path), h('p', { class: 'note' }, backend.email)),
+      h('div', { class: 'account-id' }, avatar(state.profile?.avatar_path), h('p', { class: 'note' }, backend.email)),
       messages(),
       h('ul', { class: 'menu' },
         menuItem('Mes demandes', openRequests),
@@ -579,7 +579,7 @@ function profileScreen() {
     h('main', {},
       messages(),
       h('div', { class: 'avatar-edit' },
-        avatar(p.full_name ?? backend.email ?? '', p.avatar_path, 'avatar-big'),
+        avatar(p.avatar_path, 'avatar-big'),
         h('div', {},
           h('input', { id: 'avatar-file', class: 'visually-hidden', type: 'file', accept: 'image/*', disabled: state.busy, onchange: (e) => {
             const file = e.target.files?.[0];
@@ -684,9 +684,8 @@ function ratingLabel(list) {
   return `★ ${decimal(avg)} sur 5 (${list.length} avis)`;
 }
 const avatarUrl = (path) => `${SUPABASE_URL}/storage/v1/object/public/avatars/${path}`;
-function avatar(name, path, size = '') {
-  const letter = name?.trim()?.[0]?.toUpperCase() ?? '';
-  const fallback = () => h('span', { class: `avatar avatar-letter ${size}`, 'aria-hidden': 'true' }, letter);
+function avatar(path, size = '') {
+  const fallback = () => h('span', { class: `avatar avatar-default ${size}`, 'aria-hidden': 'true' });
   if (!path) return fallback();
   const img = h('img', { class: `avatar ${size}`, src: avatarUrl(path), alt: '', loading: 'lazy', onerror: () => img.replaceWith(fallback()) });
   return img;
@@ -694,7 +693,7 @@ function avatar(name, path, size = '') {
 function reviewItem(r, extra) {
   return h('li', {},
     h('div', { class: 'review-head' },
-      avatar(r.author_name ?? 'Client', r.author_avatar),
+      avatar(r.author_avatar),
       h('div', {},
         h('strong', { class: 'review-author' }, r.author_name ?? 'Client vérifié'),
         h('span', { class: 'rate', 'aria-label': `${r.rating} sur 5` }, '★'.repeat(r.rating)))),
