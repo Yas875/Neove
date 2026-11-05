@@ -31,10 +31,10 @@ export const CATEGORIES = [
 ];
 
 export const LOCATIONS = [
-  { id: 'nice', label: 'Nice', lat: 43.695, lng: 7.285 },
+  { id: 'nice', label: 'Nice', lat: 43.695, lng: 7.285, ports: ['Port de Nice (Lympia)'] },
   { id: 'saint-augustin', label: 'Saint-Augustin', lat: 43.669, lng: 7.205 },
   { id: 'carros', label: 'Carros', lat: 43.793, lng: 7.187 },
-  { id: 'antibes', label: 'Antibes', lat: 43.585, lng: 7.128 },
+  { id: 'antibes', label: 'Antibes', lat: 43.585, lng: 7.128, ports: ['Port Vauban', 'Port Gallice', 'Port de la Salis', 'Port du Croûton'] },
 ];
 
 export function urgencyLevel(score) {
