@@ -128,7 +128,7 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     },
 
     async getProfile() {
-      const rows = await authed('/rest/v1/profiles?select=full_name,phone,home_location&limit=1');
+      const rows = await authed('/rest/v1/profiles?select=full_name,phone,home_location,avatar_path&limit=1');
       return rows[0] ?? null;
     },
 
@@ -235,12 +235,35 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     },
 
     listProReviews(proId) {
-      return call(`/rest/v1/reviews?select=id,rating,comment,reply,replied_at,created_at&pro_id=eq.${encodeURIComponent(proId)}&order=created_at.desc&limit=50`);
+      return call('/rest/v1/rpc/pro_reviews', { method: 'POST', body: { p_pro_id: proId } });
     },
 
-    async submitReview(requestId, rating, comment) {
+    // La nouvelle photo est enregistrée avant de retirer l'ancienne.
+    async uploadAvatar(blob, previous) {
+      const token = await validToken();
+      if (!token) throw new BackendError('Connectez-vous pour continuer.', 401);
+      const path = `${userIdFromToken(token)}/${crypto.randomUUID()}.jpg`;
+      await call(`/storage/v1/object/avatars/${path}`, {
+        method: 'POST', rawBody: blob, token, headers: { 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
+      });
+      const row = await this.saveProfile({ avatar_path: path });
+      if (previous) await this.removeAvatarFile(previous).catch(() => {});
+      return row;
+    },
+
+    removeAvatarFile(path) {
+      return authed(`/storage/v1/object/avatars/${path}`, { method: 'DELETE' });
+    },
+
+    async removeAvatar(path) {
+      const row = await this.saveProfile({ avatar_path: null });
+      await this.removeAvatarFile(path).catch(() => {});
+      return row;
+    },
+
+    async submitReview(requestId, rating, comment, showAuthor = false) {
       try {
-        return await authed('/rest/v1/rpc/submit_review', { method: 'POST', body: { p_request_id: requestId, p_rating: rating, p_comment: comment } });
+        return await authed('/rest/v1/rpc/submit_review', { method: 'POST', body: { p_request_id: requestId, p_rating: rating, p_comment: comment, p_show_author: showAuthor } });
       } catch (error) {
         if (error.code === '23505') throw new BackendError('Vous avez déjà laissé un avis pour cette intervention.', error.status, error.code);
         throw error;

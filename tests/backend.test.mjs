@@ -130,3 +130,11 @@ test('un second avis donne un message clair', async () => {
   await backend.signIn('a@b.fr', 'x');
   await assert.rejects(backend.submitReview('r', 5, ''), /déjà laissé/);
 });
+test('la case de signature est transmise, et reste décochée par défaut', async () => {
+  const { backend, calls } = setup([{ status: 200, body: session }, { status: 200, body: 'v' }, { status: 200, body: 'v' }]);
+  await backend.signIn('a@b.fr', 'x');
+  await backend.submitReview('r', 5, '');
+  await backend.submitReview('r', 5, '', true);
+  assert.equal(JSON.parse(calls[1].body).p_show_author, false);
+  assert.equal(JSON.parse(calls[2].body).p_show_author, true);
+});

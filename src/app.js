@@ -551,7 +551,7 @@ function accountScreen() {
   return [
     header(state.profile?.full_name || 'Mon compte', 'photo'),
     h('main', {},
-      h('p', { class: 'note' }, backend.email),
+      h('div', { class: 'account-id' }, avatar(state.profile?.full_name ?? backend.email ?? '', state.profile?.avatar_path), h('p', { class: 'note' }, backend.email)),
       messages(),
       h('ul', { class: 'menu' },
         menuItem('Mes demandes', openRequests),
@@ -578,6 +578,24 @@ function profileScreen() {
     header('Profil', 'compte'),
     h('main', {},
       messages(),
+      h('div', { class: 'avatar-edit' },
+        avatar(p.full_name ?? backend.email ?? '', p.avatar_path, 'avatar-big'),
+        h('div', {},
+          h('input', { id: 'avatar-file', class: 'visually-hidden', type: 'file', accept: 'image/*', disabled: state.busy, onchange: (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            runForm(async () => {
+              let blob;
+              try { blob = await compressPhoto(file, 400); } catch { throw new Error('Cette image ne peut pas être lue. Essayez une autre photo.'); }
+              state.profile = await backend.uploadAvatar(blob, p.avatar_path);
+              state.formInfo = 'Photo enregistrée.';
+            });
+          } }),
+          h('label', { class: 'pick-photo', for: 'avatar-file' }, p.avatar_path ? 'Changer la photo' : 'Ajouter une photo'),
+          p.avatar_path && h('button', { class: 'inline-link', type: 'button', disabled: state.busy, onclick: () => runForm(async () => {
+            state.profile = await backend.removeAvatar(p.avatar_path);
+            state.formInfo = 'Photo retirée.';
+          }) }, 'Retirer la photo'))),
       h('form', { onsubmit: (e) => {
         e.preventDefault();
         runForm(async () => {
@@ -665,9 +683,21 @@ function ratingLabel(list) {
   const avg = list.reduce((sum, r) => sum + r.rating, 0) / list.length;
   return `★ ${decimal(avg)} sur 5 (${list.length} avis)`;
 }
+const avatarUrl = (path) => `${SUPABASE_URL}/storage/v1/object/public/avatars/${path}`;
+function avatar(name, path, size = '') {
+  const letter = name?.trim()?.[0]?.toUpperCase() ?? '';
+  const fallback = () => h('span', { class: `avatar avatar-letter ${size}`, 'aria-hidden': 'true' }, letter);
+  if (!path) return fallback();
+  const img = h('img', { class: `avatar ${size}`, src: avatarUrl(path), alt: '', loading: 'lazy', onerror: () => img.replaceWith(fallback()) });
+  return img;
+}
 function reviewItem(r, extra) {
   return h('li', {},
-    h('span', { class: 'rate', 'aria-label': `${r.rating} sur 5` }, '★'.repeat(r.rating)),
+    h('div', { class: 'review-head' },
+      avatar(r.author_name ?? 'Client', r.author_avatar),
+      h('div', {},
+        h('strong', { class: 'review-author' }, r.author_name ?? 'Client vérifié'),
+        h('span', { class: 'rate', 'aria-label': `${r.rating} sur 5` }, '★'.repeat(r.rating)))),
     h('time', { datetime: r.created_at }, reviewDate.format(new Date(r.created_at))),
     r.comment && h('p', {}, r.comment),
     r.reply && h('p', { class: 'reply' }, `Réponse de l’intervenant : ${r.reply}`),
@@ -718,7 +748,7 @@ function reviewScreen() {
         e.preventDefault();
         if (!rating) { state.formError = 'Choisissez une note de 1 à 5.'; render(); return; }
         runForm(async () => {
-          await backend.submitReview(state.reviewTarget.id, rating, state.form.comment ?? '');
+          await backend.submitReview(state.reviewTarget.id, rating, state.form.comment ?? '', Boolean(state.form.showAuthor) && Boolean(state.profile?.full_name));
           await openRequests();
         });
       } },
@@ -728,7 +758,12 @@ function reviewScreen() {
         onclick: () => { state.form.rating = n; render(); },
       }, '★'))),
       field('Commentaire (facultatif)', 'comment', { type: 'textarea', maxlength: '1000' }),
-      h('p', { class: 'note' }, 'Votre avis est public, sans votre nom. Il disparaît si vous supprimez votre compte.'),
+      state.profile?.full_name
+        ? h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: Boolean(state.form.showAuthor), onchange: (e) => { state.form.showAuthor = e.target.checked; } }),
+          h('span', {}, `Afficher mon prénom, mon initiale et ma photo de profil sur cet avis`))
+        : h('p', { class: 'note' }, 'Pour signer votre avis avec votre prénom et votre photo, complétez d’abord votre profil.'),
+      h('p', { class: 'note' }, 'Votre avis est public. Sans cette case, il paraît sous « Client vérifié ». Il disparaît si vous supprimez votre compte.'),
       submit('Publier mon avis', 'Publication'))),
   ];
 }
