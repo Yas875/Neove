@@ -1,4 +1,6 @@
-# Neove : pilote nautisme
+# Seravia : pilote nautisme
+
+Anciennement Neove. Le dépôt, l'adresse du site et certains identifiants techniques gardent cet ancien nom pour l'instant.
 
 Application web installable sur téléphone : photographier une panne à bord, connaître son urgence et un prix indicatif, choisir un intervenant proche, puis suivre l'intervention. Zone pilote : Nice, Saint-Augustin, Carros et Antibes.
 
