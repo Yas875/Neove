@@ -448,7 +448,7 @@ function roleStage(selected, onpick) {
     type: 'button', onclick: () => onpick(kind), ...(selected ? { 'aria-pressed': String(selected === kind) } : {}),
   }, figure(markup), h('span', { class: 'role-label' }, label));
   return h('div', { class: `stage${enter ? ' stage-enter' : ''}`, role: 'group', 'aria-label': 'Vous êtes' },
-    role('client', 'Plaisancier', CLIENT_FIGURE), role('pro', 'Intervenant', PRO_FIGURE));
+    role('client', 'Client', CLIENT_FIGURE), role('pro', 'Intervenant', PRO_FIGURE));
 }
 
 const PASSWORD_ATTRS = { type: 'password', required: true, minlength: '8', maxlength: '72', autocomplete: 'new-password' };
