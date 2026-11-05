@@ -142,7 +142,7 @@ function photoScreen() {
     header('Quel est le problème à bord ?'),
     h('main', {},
       h('label', { for: 'photo', class: `shot${state.photo ? ' has-photo' : ''}` },
-        state.photo ? h('img', { src: state.photo, alt: 'Photo de la panne' }) : h('span', {}, 'Photographier la panne')),
+        state.photo ? h('img', { src: state.photo, alt: 'Photo de la panne' }) : h('span', { class: 'shot-text' }, h('strong', {}, 'Photographier la panne'), h('small', {}, 'Cadrez la pièce ou la zone concernée'))),
       input,
       state.accountDeleted && h('p', { class: 'lead', role: 'status' }, 'Votre compte a été supprimé.'),
       state.photoError && h('p', { class: 'error', role: 'alert' }, state.photoError),
@@ -153,6 +153,11 @@ function photoScreen() {
         ? [primary('Analyser la photo', startAnalysis),
           h('button', { class: 'link', type: 'button', onclick: () => { state.suggestion = null; go('panne'); } }, 'Continuer sans analyse')]
         : primary('Continuer sans photo', () => go('panne')),
+      !state.photo && h('ol', { class: 'howto' },
+        h('li', {}, h('strong', {}, 'Montrez la panne'), h('span', {}, 'Une photo, ou quelques questions si vous préférez.')),
+        h('li', {}, h('strong', {}, 'Voyez l’urgence'), h('span', {}, 'Avec un premier repère de prix, à confirmer après diagnostic.')),
+        h('li', {}, h('strong', {}, 'Trouvez un intervenant'), h('span', {}, 'Du plus proche au plus éloigné de votre bateau.'))),
+      !state.photo && h('p', { class: 'sos' }, 'En cas de danger, appelez le ', h('a', { href: 'tel:196' }, '196'), ' en mer ou le ', h('a', { href: 'tel:112' }, '112'), ' à quai.'),
       backend.signedIn && h('button', { class: 'link', type: 'button', onclick: openRequests }, 'Voir mes demandes'),
       state.myPro && h('button', { class: 'link', type: 'button', onclick: openProSpace }, 'Espace intervenant'),
       !backend.signedIn && h('button', { class: 'link', type: 'button', onclick: () => {
