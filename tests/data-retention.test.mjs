@@ -65,6 +65,12 @@ test('le compte supprimé est celui du jeton, pas celui envoyé par l’app', as
   const proPatch = calls.find((c) => c.url.includes('/rest/v1/pros'));
   assert.deepEqual(JSON.parse(proPatch.body), { verified: false });
 });
+test('la photo de profil est aussi effacée avec le compte', async () => {
+  const { calls, fetcher } = accountBackend();
+  await removeAccount(accReq(), env, fetcher);
+  assert.ok(calls.some((c) => c.method === 'POST' && c.url.includes('/object/list/avatars')));
+  assert.ok(calls.findIndex((c) => c.url.includes('/object/list/avatars')) < calls.length - 1);
+});
 test('sans jeton, aucune requête ne part', async () => {
   const { calls, fetcher } = accountBackend();
   const req = new Request('https://f/delete', { method: 'POST' });

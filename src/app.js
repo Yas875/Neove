@@ -2,16 +2,18 @@ import { CATEGORIES, LOCATIONS, matchPros, triage, urgencyLevel } from './triage
 import { DEMO_PROS } from './demo-data.js';
 import { SUPABASE_KEY, SUPABASE_URL } from './config.js';
 import { createBackend, toRequestRow } from './backend.js';
-import { compressPhoto, savePendingPhoto, takePendingPhoto } from './pending-photo.js';
+import { compressPhoto, takePendingPhoto } from './pending-photo.js';
 
 const STEPS = ['Demande enregistrée', 'Intervenant en route', 'Intervention en cours', 'Intervention terminée'];
 const app = document.querySelector('#app');
 const DRAFT_KEY = 'neove.brouillon';
 const state = {
   screen: 'photo', photo: null, category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0,
-  saving: false, saveError: null, loginEmail: null, loginError: null, sending: false, requests: null, listError: null,
+  saving: false, saveError: null, loginError: null, sending: false, requests: null, listError: null,
   deleting: false, deleteError: null, accountDeleted: false, realPros: null, phone: '', myPro: null, proRequests: null, proError: null, proCurrent: null, proPhoto: null, proBusy: false,
-  photoBlob: null, photoPath: null, photoError: null, suggestion: null, analysisError: null, loginBack: 'pros', loginTitle: '',
+  photoBlob: null, photoPath: null, photoError: null, suggestion: null, analysisError: null, loginBack: 'photo', loginTitle: '', afterLogin: null,
+  form: {}, formError: null, formInfo: null, busy: false, profile: null, signupKind: 'client', notice: null,
+  reviewed: [], reviewTarget: null, proReviews: null, proView: null, ratings: [],
 };
 
 function safeStorage() {
@@ -51,7 +53,7 @@ async function submitRequest() {
     go(state.pro.real ? 'envoyee' : 'suivi');
   } catch (error) {
     state.saving = false;
-    if (!backend.signedIn) { state.loginError = error.message; go('connexion'); return; }
+    if (!backend.signedIn) { state.loginError = error.message; state.afterLogin = 'submit'; go('connexion'); return; }
     state.saveError = error.message;
     go('envoi');
   }
@@ -68,8 +70,7 @@ function resetFlow() {
 async function startAnalysis() {
   if (backend.signedIn) { runAnalysis(); return; }
   clearDraft();
-  await savePendingPhoto(state.photoBlob);
-  Object.assign(state, { loginEmail: null, loginError: null, loginBack: 'photo', loginTitle: 'Connectez-vous pour analyser la photo' });
+  Object.assign(state, { loginError: null, afterLogin: 'analyse', loginBack: 'photo', loginTitle: 'Connectez-vous pour analyser la photo' });
   go('connexion');
 }
 
@@ -84,8 +85,7 @@ async function runAnalysis() {
     go('panne');
   } catch (error) {
     if (!backend.signedIn) {
-      await savePendingPhoto(state.photoBlob);
-      Object.assign(state, { loginEmail: null, loginError: error.message, loginBack: 'photo', loginTitle: 'Connectez-vous pour analyser la photo' });
+      Object.assign(state, { loginError: error.message, afterLogin: 'analyse', loginBack: 'photo', loginTitle: 'Connectez-vous pour analyser la photo' });
       go('connexion');
       return;
     }
@@ -115,9 +115,14 @@ function h(tag, props = {}, ...children) {
   el.append(...children.flat().filter((c) => c != null && c !== false));
   return el;
 }
-const go = (screen) => { if (screen === 'connexion-retour') { state.loginEmail = null; screen = 'connexion'; } state.screen = screen; render(); window.scrollTo(0, 0); document.querySelector('h1')?.focus(); };
-const header = (title, back) => h('header', { class: 'top' },
-  back ? h('button', { class: 'back', type: 'button', onclick: () => go(back) }, 'Retour') : h('span', { class: 'brand' }, h('img', { src: 'icon-192.png', alt: '', width: '32', height: '32' }), 'Seravia'),
+const go = (screen) => { Object.assign(state, { form: {}, formError: null, formInfo: null, busy: false }); state.screen = screen; render(); window.scrollTo(0, 0); document.querySelector('h1')?.focus(); };
+const brand = () => h('span', { class: 'brand' }, h('img', { src: 'icon-192.png', alt: '', width: '32', height: '32' }), 'Seravia');
+const accountNav = () => h('nav', { class: 'top-nav', 'aria-label': 'Compte' }, backend.signedIn
+  ? h('button', { class: 'nav-link', type: 'button', onclick: () => go('compte') }, 'Mon compte')
+  : [h('button', { class: 'nav-link', type: 'button', onclick: () => openLogin() }, 'Se connecter'),
+    h('button', { class: 'nav-pill', type: 'button', onclick: () => openSignup('client') }, 'S’inscrire')]);
+const header = (title, back, nav) => h('header', { class: 'top' },
+  back ? h('button', { class: 'back', type: 'button', onclick: () => go(back) }, 'Retour') : h('div', { class: 'top-row' }, brand(), nav && accountNav()),
   h('h1', { tabindex: '-1' }, title));
 const choice = (label, selected, onclick) => h('button', {
   class: `choice${selected ? ' is-on' : ''}`, type: 'button', 'aria-pressed': String(Boolean(selected)), onclick,
@@ -139,7 +144,7 @@ function photoScreen() {
     },
   });
   return [
-    header('Quel est le problème à bord ?'),
+    header('Quel est le problème à bord ?', null, true),
     h('main', {},
       h('label', { for: 'photo', class: `shot${state.photo ? ' has-photo' : ''}` },
         state.photo ? h('img', { src: state.photo, alt: 'Photo de la panne' }) : h('span', { class: 'shot-text' }, h('strong', {}, 'Photographier la panne'), h('small', {}, 'Cadrez la pièce ou la zone concernée'))),
@@ -158,13 +163,7 @@ function photoScreen() {
         h('li', {}, h('strong', {}, 'Voyez l’urgence'), h('span', {}, 'Avec un premier repère de prix, à confirmer après diagnostic.')),
         h('li', {}, h('strong', {}, 'Trouvez un intervenant'), h('span', {}, 'Du plus proche au plus éloigné de votre bateau.'))),
       !state.photo && h('p', { class: 'sos' }, 'En cas de danger, appelez le ', h('a', { href: 'tel:196' }, '196'), ' en mer ou le ', h('a', { href: 'tel:112' }, '112'), ' à quai.'),
-      backend.signedIn && h('button', { class: 'link', type: 'button', onclick: openRequests }, 'Voir mes demandes'),
-      state.myPro && h('button', { class: 'link', type: 'button', onclick: openProSpace }, 'Espace intervenant'),
-      !backend.signedIn && h('button', { class: 'link', type: 'button', onclick: () => {
-        clearDraft();
-        Object.assign(state, { loginEmail: null, loginError: null, loginBack: 'photo', loginTitle: 'Connexion intervenant' });
-        go('connexion');
-      } }, 'Accès intervenant')),
+      !backend.signedIn && h('button', { class: 'link', type: 'button', onclick: () => openSignup('pro') }, 'Vous êtes intervenant ? Créer un compte')),
   ];
 }
 
@@ -180,6 +179,7 @@ function suggestionBox() {
 }
 
 function panneScreen() {
+  state.location ??= state.profile?.home_location ?? null;
   const category = CATEGORIES.find((c) => c.id === state.category);
   const ready = state.symptom && state.location;
   return [
@@ -235,6 +235,7 @@ function prosScreen() {
   if (state.realPros === null) {
     state.realPros = [];
     backend.listPros().then((rows) => { state.realPros = rows; if (state.screen === 'pros') render(); }).catch(() => {});
+    backend.listRatings().then((rows) => { state.ratings = rows; if (state.screen === 'pros') render(); }).catch(() => {});
   }
   const real = matchPros(state.realPros, state.category, location).map((p) => ({ ...p, real: true }));
   const pros = real.length ? real : matchPros(DEMO_PROS, state.category, location);
@@ -243,18 +244,19 @@ function prosScreen() {
     h('main', {},
       !real.length && h('p', { class: 'demo' }, 'Intervenants fictifs : cette version sert de démonstration.'),
       h('ul', { class: 'pros' }, pros.map((p) => h('li', {},
-        h('div', {}, h('strong', {}, p.name), h('span', {}, p.distance < 1 ? 'Moins de 1 km à vol d’oiseau' : `${p.distance.toFixed(1).replace('.', ',')} km à vol d’oiseau`)),
+        h('div', {}, h('strong', {}, p.name), h('span', {}, p.distance < 1 ? 'Moins de 1 km à vol d’oiseau' : `${p.distance.toFixed(1).replace('.', ',')} km à vol d’oiseau`),
+          p.real && h('button', { class: 'inline-link', type: 'button', onclick: () => openPublicPro(p) }, ratingLabel(state.ratings.filter((x) => x.pro_id === p.id)))),
         h('button', { class: 'pick', type: 'button', onclick: () => {
           state.pro = p; saveDraft();
           if (p.real) go('contact');
           else if (backend.signedIn) submitRequest();
-          else { Object.assign(state, { loginEmail: null, loginError: null, loginBack: 'pros', loginTitle: 'Connectez-vous pour enregistrer la demande' }); go('connexion'); }
+          else { Object.assign(state, { loginError: null, afterLogin: 'submit', loginBack: 'pros', loginTitle: 'Connectez-vous pour enregistrer la demande' }); go('connexion'); }
         } }, 'Choisir'))))),
   ];
 }
 
 function contactScreen() {
-  const input = h('input', { id: 'phone', type: 'tel', autocomplete: 'tel', required: true, minlength: '6', maxlength: '30', value: state.phone });
+  const input = h('input', { id: 'phone', type: 'tel', autocomplete: 'tel', required: true, minlength: '6', maxlength: '30', value: state.phone || state.profile?.phone || '' });
   return [
     header('Comment vous joindre ?', 'pros'),
     h('main', {}, h('form', {
@@ -263,7 +265,7 @@ function contactScreen() {
         state.phone = input.value.trim();
         saveDraft();
         if (backend.signedIn) submitRequest();
-        else { Object.assign(state, { loginEmail: null, loginError: null, loginBack: 'contact', loginTitle: 'Connectez-vous pour envoyer la demande' }); go('connexion'); }
+        else { Object.assign(state, { loginError: null, afterLogin: 'submit', loginBack: 'contact', loginTitle: 'Connectez-vous pour envoyer la demande' }); go('connexion'); }
       },
     },
     h('label', { class: 'field', for: 'phone' }, 'Numéro de téléphone'), input,
@@ -305,9 +307,9 @@ function describeRequest(r) {
 
 function proScreen() {
   return [
-    header(state.myPro.verified ? state.myPro.name : 'Fiche en attente de vérification', 'photo'),
+    header(state.myPro.verified ? 'Demandes reçues' : 'Fiche en attente de vérification', 'compte'),
     h('main', {},
-      !state.myPro.verified && h('p', { class: 'lead' }, 'Vous recevrez des demandes une fois votre fiche vérifiée.'),
+      !state.myPro.verified && h('p', { class: 'lead' }, 'Vous recevrez des demandes une fois votre fiche vérifiée par Seravia.'),
       state.proError && h('p', { class: 'error', role: 'alert' }, state.proError),
       !state.proRequests && !state.proError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
       state.proRequests?.length === 0 && state.myPro.verified && h('p', { class: 'lead' }, 'Aucune demande pour l’instant.'),
@@ -364,21 +366,21 @@ function proRequestScreen() {
 
 function deleteAccountScreen() {
   return [
-    header('Supprimer votre compte ?', 'demandes'),
+    header('Supprimer votre compte ?', 'parametres'),
     h('main', {},
       state.deleteError && h('p', { class: 'error', role: 'alert' }, state.deleteError),
-      h('p', { class: 'lead' }, 'Votre compte, vos demandes et vos photos seront supprimés définitivement. Cette action ne peut pas être annulée.'),
+      h('p', { class: 'lead' }, 'Votre compte, votre profil, vos demandes, vos avis et vos photos seront supprimés définitivement. Cette action ne peut pas être annulée.'),
       state.myPro && h('p', { class: 'note' }, 'Votre fiche d’intervenant ne sera plus proposée aux plaisanciers.'),
       h('button', { class: 'primary danger-action', type: 'button', disabled: state.deleting, onclick: async () => {
         state.deleting = true; state.deleteError = null; render();
         try {
           await backend.deleteAccount();
           clearDraft(); await takePendingPhoto();
-          state.myPro = null; resetFlow(); state.deleting = false; state.accountDeleted = true;
+          state.myPro = null; state.profile = null; resetFlow(); state.deleting = false; state.accountDeleted = true;
           go('photo');
         } catch (error) { state.deleting = false; state.deleteError = error.message; render(); }
       } }, state.deleting ? 'Suppression en cours' : 'Supprimer définitivement'),
-      h('button', { class: 'secondary', type: 'button', disabled: state.deleting, onclick: () => go('demandes') }, 'Garder mon compte')),
+      h('button', { class: 'secondary', type: 'button', disabled: state.deleting, onclick: () => go('parametres') }, 'Garder mon compte')),
   ];
 }
 
@@ -397,36 +399,393 @@ function trackScreen() {
   ];
 }
 
-function loginScreen() {
-  if (state.loginEmail) {
-    return [
-      header('Consultez vos e-mails', 'connexion-retour'),
-      h('main', {},
-        h('p', { class: 'lead' }, `Un lien de connexion a été envoyé à ${state.loginEmail}. Ouvrez-le sur cet appareil et dans ce navigateur pour retrouver votre demande.`),
-        h('p', { class: 'note' }, 'Rien reçu ? Vérifiez vos courriers indésirables.')),
-    ];
-  }
-  const input = h('input', { id: 'email', type: 'email', name: 'email', autocomplete: 'email', required: true, value: '' });
+// Champs dont la saisie survit à un nouvel affichage. Un mot de passe n'est jamais gardé.
+function field(label, id, attrs = {}, initial = '') {
+  const secret = attrs.type === 'password';
+  const value = secret ? '' : state.form[id] ?? initial ?? '';
+  if (!secret) state.form[id] = value;
+  const oninput = secret ? undefined : (e) => { state.form[id] = e.target.value; };
+  const control = attrs.type === 'textarea'
+    ? h('textarea', { id, maxlength: attrs.maxlength, oninput }, value)
+    : h('input', { id, name: id, type: 'text', ...attrs, ...(secret ? {} : { value }), ...(oninput ? { oninput } : {}) });
+  return [h('label', { class: 'field', for: id }, label), control];
+}
+function selectField(label, id, options, initial = '') {
+  const value = state.form[id] ?? initial ?? '';
+  state.form[id] = value;
   return [
-    header(state.loginTitle || 'Connectez-vous', state.loginBack),
+    h('label', { class: 'field', for: id }, label),
+    h('select', { id, required: true, onchange: (e) => { state.form[id] = e.target.value; } },
+      h('option', { value: '', selected: !value, disabled: true }, 'Choisir'),
+      options.map(([v, text]) => h('option', { value: v, selected: v === value }, text))),
+  ];
+}
+const messages = () => [
+  state.formError && h('p', { class: 'error', role: 'alert' }, state.formError),
+  state.formInfo && h('p', { class: 'status', role: 'status' }, state.formInfo),
+];
+async function runForm(action) {
+  if (state.busy) return;
+  state.busy = true; state.formError = null; state.formInfo = null; render();
+  try { await action(); } catch (error) { state.formError = error.message; }
+  state.busy = false; render();
+}
+const submit = (label, busyLabel) => h('button', { class: 'primary', type: 'submit', disabled: state.busy }, state.busy ? busyLabel : label);
+const PASSWORD_ATTRS = { type: 'password', required: true, minlength: '8', maxlength: '72', autocomplete: 'new-password' };
+
+function openLogin() {
+  Object.assign(state, { loginError: null, afterLogin: null, loginBack: 'photo', loginTitle: '' });
+  go('connexion');
+}
+function openSignup(kind) {
+  state.signupKind = kind; state.loginBack = 'photo'; state.afterLogin = null;
+  go('inscription');
+}
+async function afterAuth() {
+  state.loginError = null; state.notice = null;
+  await loadMyPro();
+  const next = state.afterLogin;
+  state.afterLogin = null;
+  if (state.signupKind === 'pro' && !state.myPro) { state.signupKind = 'client'; go('pro-fiche'); return; }
+  if (next === 'submit' && state.pro) { submitRequest(); return; }
+  if (next === 'analyse' && state.photoBlob) { runAnalysis(); return; }
+  go('compte');
+}
+
+function loginScreen() {
+  const email = () => (state.form.email ?? '').trim();
+  return [
+    header(state.loginTitle || 'Se connecter', state.loginBack),
     h('main', {},
+      state.notice && h('p', { class: 'status', role: 'status' }, state.notice),
       state.loginError && h('p', { class: 'error', role: 'alert' }, state.loginError),
-      h('form', {
-        onsubmit: async (e) => {
-          e.preventDefault();
-          if (state.sending) return;
-          const email = input.value.trim();
-          state.sending = true; state.loginError = null; render();
-          try {
-            await backend.sendLoginLink(email, location.origin + location.pathname);
-            state.loginEmail = email;
-          } catch (error) { state.loginError = error.message; }
-          state.sending = false; render();
-        },
-      },
-      h('label', { class: 'field', for: 'email' }, 'Adresse e-mail'), input,
-      h('button', { class: 'primary', type: 'submit', disabled: state.sending }, state.sending ? 'Envoi en cours' : 'Recevoir le lien de connexion')),
-      h('p', { class: 'note' }, 'Vous recevrez un lien par e-mail : aucun mot de passe à créer.')),
+      messages(),
+      h('form', { onsubmit: (e) => {
+        e.preventDefault();
+        const password = e.target.elements.password.value;
+        state.loginError = null;
+        runForm(async () => { await backend.signIn(email(), password); await afterAuth(); });
+      } },
+      field('Adresse e-mail', 'email', { type: 'email', required: true, autocomplete: 'email' }),
+      field('Mot de passe', 'password', { type: 'password', required: true, autocomplete: 'current-password' }),
+      submit('Se connecter', 'Connexion en cours')),
+      h('button', { class: 'link', type: 'button', onclick: () => { const typed = state.form.email; go('oubli'); state.form.email = typed; render(); } }, 'Mot de passe oublié'),
+      h('button', { class: 'link', type: 'button', onclick: () => go('inscription') }, 'Pas encore de compte ? S’inscrire')),
+  ];
+}
+
+function signupScreen() {
+  const pro = state.signupKind === 'pro';
+  return [
+    header('Créer un compte', state.loginBack),
+    h('main', {},
+      messages(),
+      h('h2', {}, 'Vous êtes'),
+      h('div', { class: 'choices' },
+        choice('Plaisancier', !pro, () => { state.signupKind = 'client'; render(); }),
+        choice('Intervenant', pro, () => { state.signupKind = 'pro'; render(); })),
+      h('form', { onsubmit: (e) => {
+        e.preventDefault();
+        const password = e.target.elements.password.value;
+        runForm(async () => {
+          const email = state.form.email.trim();
+          const name = state.form.full_name.trim();
+          const outcome = await backend.signUp(email, password);
+          if (outcome.confirm) {
+            state.notice = 'Votre compte est créé. Confirmez votre adresse avec le lien reçu par e-mail, puis connectez-vous.';
+            state.loginTitle = '';
+            go('connexion');
+            return;
+          }
+          await backend.saveProfile({ full_name: name }).catch(() => {});
+          await afterAuth();
+        });
+      } },
+      field(pro ? 'Votre prénom et nom' : 'Prénom et nom', 'full_name', { required: true, maxlength: '100', autocomplete: 'name' }),
+      field('Adresse e-mail', 'email', { type: 'email', required: true, autocomplete: 'email' }),
+      field('Mot de passe (8 caractères minimum)', 'password', PASSWORD_ATTRS),
+      h('p', { class: 'note' }, pro
+        ? 'Vous compléterez ensuite votre fiche. Elle reste invisible des clients tant que Seravia ne l’a pas vérifiée.'
+        : 'Votre compte sert à enregistrer et suivre vos demandes. Vous pouvez le supprimer à tout moment.'),
+      submit('Créer mon compte', 'Création en cours')),
+      h('button', { class: 'link', type: 'button', onclick: () => go('connexion') }, 'Déjà un compte ? Se connecter')),
+  ];
+}
+
+function forgotScreen() {
+  return [
+    header('Mot de passe oublié', 'connexion'),
+    h('main', {},
+      messages(),
+      h('form', { onsubmit: (e) => {
+        e.preventDefault();
+        runForm(async () => {
+          await backend.sendPasswordReset(state.form.email.trim(), location.origin + location.pathname);
+          state.formInfo = 'Si un compte existe avec cette adresse, un lien vient d’être envoyé. Ouvrez-le sur cet appareil.';
+        });
+      } },
+      field('Adresse e-mail', 'email', { type: 'email', required: true, autocomplete: 'email' }),
+      submit('Recevoir le lien', 'Envoi en cours'))),
+  ];
+}
+
+function newPasswordScreen() {
+  return [
+    header('Nouveau mot de passe'),
+    h('main', {},
+      messages(),
+      h('form', { onsubmit: (e) => {
+        e.preventDefault();
+        const password = e.target.elements.password.value;
+        runForm(async () => { await backend.changePassword(password); go('compte'); state.formInfo = 'Votre mot de passe a été changé.'; });
+      } },
+      field('Mot de passe (8 caractères minimum)', 'password', PASSWORD_ATTRS),
+      submit('Enregistrer', 'Enregistrement'))),
+  ];
+}
+
+const menuItem = (label, onclick, detail) => h('li', {}, h('button', { type: 'button', onclick }, h('span', {}, label), detail && h('small', {}, detail)));
+
+function accountScreen() {
+  if (!backend.signedIn) { state.screen = 'connexion'; return loginScreen(); }
+  return [
+    header(state.profile?.full_name || 'Mon compte', 'photo'),
+    h('main', {},
+      h('div', { class: 'account-id' }, avatar(state.profile?.avatar_path), h('p', { class: 'note' }, backend.email)),
+      messages(),
+      h('ul', { class: 'menu' },
+        menuItem('Mes demandes', openRequests),
+        menuItem('Profil', () => go('profil')),
+        menuItem('Paramètres', () => go('parametres'))),
+      state.myPro
+        ? [h('h2', { class: 'section-title' }, 'Espace intervenant'),
+          h('ul', { class: 'menu' },
+            menuItem('Demandes reçues', openProSpace),
+            menuItem('Ma fiche', () => go('pro-fiche'), state.myPro.verified ? 'Vérifiée' : 'En attente de vérification'),
+            menuItem('Mes avis', openProReviews))]
+        : h('button', { class: 'link', type: 'button', onclick: () => go('pro-fiche') }, 'Vous êtes intervenant ? Créer ma fiche'),
+      h('button', { class: 'secondary', type: 'button', onclick: async () => {
+        await backend.signOut();
+        Object.assign(state, { myPro: null, profile: null, reviewed: [] });
+        resetFlow(); go('photo');
+      } }, 'Se déconnecter')),
+  ];
+}
+
+function profileScreen() {
+  const p = state.profile ?? {};
+  return [
+    header('Profil', 'compte'),
+    h('main', {},
+      messages(),
+      h('div', { class: 'avatar-edit' },
+        avatar(p.avatar_path, 'avatar-big'),
+        h('div', {},
+          h('input', { id: 'avatar-file', class: 'visually-hidden', type: 'file', accept: 'image/*', disabled: state.busy, onchange: (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            runForm(async () => {
+              let blob;
+              try { blob = await compressPhoto(file, 400); } catch { throw new Error('Cette image ne peut pas être lue. Essayez une autre photo.'); }
+              state.profile = await backend.uploadAvatar(blob, p.avatar_path);
+              state.formInfo = 'Photo enregistrée.';
+            });
+          } }),
+          h('label', { class: 'pick-photo', for: 'avatar-file' }, p.avatar_path ? 'Changer la photo' : 'Ajouter une photo'),
+          p.avatar_path && h('button', { class: 'inline-link', type: 'button', disabled: state.busy, onclick: () => runForm(async () => {
+            state.profile = await backend.removeAvatar(p.avatar_path);
+            state.formInfo = 'Photo retirée.';
+          }) }, 'Retirer la photo'))),
+      h('form', { onsubmit: (e) => {
+        e.preventDefault();
+        runForm(async () => {
+          state.profile = await backend.saveProfile({
+            full_name: state.form.full_name.trim() || null,
+            phone: state.form.phone.trim() || null,
+            home_location: state.form.home_location || null,
+          });
+          state.formInfo = 'Profil enregistré.';
+        });
+      } },
+      field('Prénom et nom', 'full_name', { maxlength: '100', autocomplete: 'name' }, p.full_name),
+      field('Téléphone', 'phone', { type: 'tel', minlength: '6', maxlength: '30', autocomplete: 'tel' }, p.phone),
+      selectFieldOptional('Port habituel', 'home_location', LOCATIONS.map((l) => [l.id, l.label]), p.home_location),
+      h('p', { class: 'note' }, 'Ces informations préremplissent vos demandes. Votre téléphone n’est transmis qu’à l’intervenant que vous choisissez.'),
+      submit('Enregistrer', 'Enregistrement'))),
+  ];
+}
+function selectFieldOptional(label, id, options, initial) {
+  const value = state.form[id] ?? initial ?? '';
+  state.form[id] = value;
+  return [
+    h('label', { class: 'field', for: id }, label),
+    h('select', { id, onchange: (e) => { state.form[id] = e.target.value; } },
+      h('option', { value: '', selected: !value }, 'Non renseigné'),
+      options.map(([v, text]) => h('option', { value: v, selected: v === value }, text))),
+  ];
+}
+
+function settingsScreen() {
+  return [
+    header('Paramètres', 'compte'),
+    h('main', {},
+      messages(),
+      h('dl', { class: 'facts' }, h('dt', {}, 'Adresse e-mail'), h('dd', {}, backend.email)),
+      h('form', { onsubmit: (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const password = form.elements.password.value;
+        runForm(async () => { await backend.changePassword(password); state.formInfo = 'Votre mot de passe a été changé.'; });
+      } },
+      field('Nouveau mot de passe (8 caractères minimum)', 'password', PASSWORD_ATTRS),
+      h('button', { class: 'secondary', type: 'submit', disabled: state.busy }, state.busy ? 'Enregistrement' : 'Changer le mot de passe')),
+      h('p', { class: 'note' }, 'Vous pouvez supprimer votre compte et vos données à tout moment.'),
+      h('button', { class: 'link link-danger', type: 'button', onclick: () => { state.deleteError = null; go('supprimer'); } }, 'Supprimer mon compte')),
+  ];
+}
+
+function proProfileScreen() {
+  const p = state.myPro ?? {};
+  return [
+    header(state.myPro ? 'Ma fiche' : 'Créer ma fiche', 'compte'),
+    h('main', {},
+      h('p', { class: 'status' }, p.verified
+        ? 'Fiche vérifiée et visible des clients. Changer le nom, le métier ou le SIRET la renverra en vérification.'
+        : 'Votre fiche reste invisible des clients tant que Seravia ne l’a pas vérifiée.'),
+      messages(),
+      h('form', { onsubmit: (e) => {
+        e.preventDefault();
+        const f = state.form;
+        const siret = f.siret.replace(/\s/g, '');
+        if (!/^\d{14}$/.test(siret)) { state.formError = 'Le SIRET doit contenir 14 chiffres.'; render(); return; }
+        runForm(async () => {
+          state.myPro = await backend.saveProProfile({
+            name: f.name, category: f.category, location: f.location, phone: f.phone, siret, description: f.description,
+          });
+          state.formInfo = state.myPro.verified ? 'Fiche enregistrée.' : 'Fiche enregistrée. Elle attend la vérification de Seravia.';
+        });
+      } },
+      field('Nom de l’entreprise', 'name', { required: true, minlength: '2', maxlength: '100', autocomplete: 'organization' }, p.name),
+      selectField('Métier', 'category', CATEGORIES.map((c) => [c.id, c.trade]), p.category),
+      selectField('Ville ou port', 'location', LOCATIONS.map((l) => [l.id, l.label]), p.location),
+      field('Téléphone professionnel', 'phone', { type: 'tel', required: true, minlength: '6', maxlength: '30', autocomplete: 'tel' }, p.phone),
+      field('SIRET', 'siret', { required: true, inputmode: 'numeric', maxlength: '20' }, p.siret),
+      field('Présentation (facultatif)', 'description', { type: 'textarea', maxlength: '500' }, p.description),
+      h('p', { class: 'note' }, 'Le nom, le métier, le téléphone et la présentation sont affichés aux clients une fois la fiche vérifiée.'),
+      submit('Enregistrer ma fiche', 'Enregistrement'))),
+  ];
+}
+
+const reviewDate = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' });
+const decimal = (n) => n.toFixed(1).replace('.', ',');
+function ratingLabel(list) {
+  if (!list.length) return 'Voir la fiche, aucun avis';
+  const avg = list.reduce((sum, r) => sum + r.rating, 0) / list.length;
+  return `★ ${decimal(avg)} sur 5 (${list.length} avis)`;
+}
+const avatarUrl = (path) => `${SUPABASE_URL}/storage/v1/object/public/avatars/${path}`;
+function avatar(path, size = '') {
+  const fallback = () => h('span', { class: `avatar avatar-default ${size}`, 'aria-hidden': 'true' });
+  if (!path) return fallback();
+  const img = h('img', { class: `avatar ${size}`, src: avatarUrl(path), alt: '', loading: 'lazy', onerror: () => img.replaceWith(fallback()) });
+  return img;
+}
+function reviewItem(r, extra) {
+  return h('li', {},
+    h('div', { class: 'review-head' },
+      avatar(r.author_avatar),
+      h('div', {},
+        h('strong', { class: 'review-author' }, r.author_name ?? 'Client vérifié'),
+        h('span', { class: 'rate', 'aria-label': `${r.rating} sur 5` }, '★'.repeat(r.rating)))),
+    h('time', { datetime: r.created_at }, reviewDate.format(new Date(r.created_at))),
+    r.comment && h('p', {}, r.comment),
+    r.reply && h('p', { class: 'reply' }, `Réponse de l’intervenant : ${r.reply}`),
+    extra);
+}
+const reviewsNote = () => h('p', { class: 'note' }, 'Seuls les clients dont l’intervention est marquée terminée peuvent laisser un avis. Les plus récents apparaissent en premier.');
+
+async function openProReviews() {
+  state.proReviews = null;
+  go('pro-avis');
+  try { state.proReviews = await backend.listProReviews(state.myPro.id); } catch (error) { state.formError = error.message; }
+  render();
+}
+function proReviewsScreen() {
+  const list = state.proReviews;
+  return [
+    header('Mes avis', 'compte'),
+    h('main', {},
+      messages(),
+      !list && !state.formError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
+      !state.myPro.verified && h('p', { class: 'note' }, 'Vos avis apparaîtront une fois votre fiche vérifiée.'),
+      list?.length === 0 && state.myPro.verified && h('p', { class: 'lead' }, 'Aucun avis pour l’instant.'),
+      list?.length > 0 && h('p', { class: 'rating-big' }, ratingLabel(list)),
+      list?.length > 0 && h('ul', { class: 'reviews' }, list.map((r) => reviewItem(r, !r.reply && h('form', { onsubmit: (e) => {
+        e.preventDefault();
+        const reply = e.target.elements.reply.value.trim();
+        if (!reply) return;
+        runForm(async () => {
+          await backend.replyToReview(r.id, reply);
+          state.proReviews = await backend.listProReviews(state.myPro.id);
+          state.formInfo = 'Réponse publiée.';
+        });
+      } },
+      h('label', { class: 'field', for: `reply-${r.id}` }, 'Répondre'),
+      h('textarea', { id: `reply-${r.id}`, name: 'reply', maxlength: '1000' }),
+      h('button', { class: 'secondary', type: 'submit', disabled: state.busy }, 'Publier la réponse'))))),
+      reviewsNote()),
+  ];
+}
+
+function reviewScreen() {
+  const rating = Number(state.form.rating ?? 0);
+  return [
+    header('Votre avis', 'demandes'),
+    h('main', {},
+      messages(),
+      h('form', { onsubmit: (e) => {
+        e.preventDefault();
+        if (!rating) { state.formError = 'Choisissez une note de 1 à 5.'; render(); return; }
+        runForm(async () => {
+          await backend.submitReview(state.reviewTarget.id, rating, state.form.comment ?? '', Boolean(state.form.showAuthor) && Boolean(state.profile?.full_name));
+          await openRequests();
+        });
+      } },
+      h('h2', {}, 'Votre note'),
+      h('div', { class: 'stars', role: 'group', 'aria-label': 'Note sur 5' }, [1, 2, 3, 4, 5].map((n) => h('button', {
+        class: `star${n <= rating ? ' is-on' : ''}`, type: 'button', 'aria-label': `${n} sur 5`, 'aria-pressed': String(n === rating),
+        onclick: () => { state.form.rating = n; render(); },
+      }, '★'))),
+      field('Commentaire (facultatif)', 'comment', { type: 'textarea', maxlength: '1000' }),
+      state.profile?.full_name
+        ? h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: Boolean(state.form.showAuthor), onchange: (e) => { state.form.showAuthor = e.target.checked; } }),
+          h('span', {}, `Afficher mon prénom, mon initiale et ma photo de profil sur cet avis`))
+        : h('p', { class: 'note' }, 'Pour signer votre avis avec votre prénom et votre photo, complétez d’abord votre profil.'),
+      h('p', { class: 'note' }, 'Votre avis est public. Sans cette case, il paraît sous « Client vérifié ». Il disparaît si vous supprimez votre compte.'),
+      submit('Publier mon avis', 'Publication'))),
+  ];
+}
+
+async function openPublicPro(pro) {
+  Object.assign(state, { proView: pro, proReviews: null });
+  go('pro-public');
+  try { state.proReviews = await backend.listProReviews(pro.id); } catch (error) { state.formError = error.message; }
+  render();
+}
+function publicProScreen() {
+  const p = state.proView;
+  const list = state.proReviews;
+  return [
+    header(p.name, 'pros'),
+    h('main', {},
+      messages(),
+      p.description && h('p', { class: 'lead' }, p.description),
+      !list && !state.formError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
+      list?.length === 0 && h('p', { class: 'note' }, 'Aucun avis pour l’instant.'),
+      list?.length > 0 && h('p', { class: 'rating-big' }, ratingLabel(list)),
+      list?.length > 0 && h('ul', { class: 'reviews' }, list.map((r) => reviewItem(r))),
+      reviewsNote()),
   ];
 }
 
@@ -447,8 +806,10 @@ async function openRequests() {
   Object.assign(state, { proError: null });
   state.requests = null; state.listError = null;
   go('demandes');
-  try { state.requests = await backend.listRequests(); } catch (error) { state.listError = error.message; }
-  if (!backend.signedIn) { state.loginError = state.listError; state.loginEmail = null; go('connexion'); return; }
+  try {
+    [state.requests, state.reviewed] = await Promise.all([backend.listRequests(), backend.myReviewedRequests()]);
+  } catch (error) { state.listError = error.message; }
+  if (!backend.signedIn) { state.loginError = state.listError; go('connexion'); return; }
   render();
 }
 
@@ -461,7 +822,7 @@ function requestsScreen() {
     };
   };
   return [
-    header('Mes demandes', 'photo'),
+    header('Mes demandes', 'compte'),
     h('main', {},
       state.listError && h('p', { class: 'error', role: 'alert' }, state.listError),
       !state.requests && !state.listError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
@@ -471,24 +832,26 @@ function requestsScreen() {
         return h('li', {}, h('div', {},
           h('strong', {}, d.symptom),
           h('span', {}, `${d.place}, ${dateFormat.format(new Date(r.created_at))}`),
-          h('span', {}, `${STATUS_LABELS[r.status] ?? r.status}, ${r.price_min} à ${r.price_max} €`)));
-      })),
-      h('p', { class: 'note' }, `Connecté avec ${backend.email}`),
-      h('button', { class: 'link', type: 'button', onclick: async () => { await backend.signOut(); state.myPro = null; resetFlow(); go('photo'); } }, 'Se déconnecter'),
-      h('button', { class: 'link link-danger', type: 'button', onclick: () => { state.deleteError = null; go('supprimer'); } }, 'Supprimer mon compte')),
+          h('span', {}, `${STATUS_LABELS[r.status] ?? r.status}, ${r.price_min} à ${r.price_max} €`),
+          r.status === 'terminee' && r.pro_id && (state.reviewed.includes(r.id)
+            ? h('span', {}, 'Avis envoyé')
+            : h('button', { class: 'inline-link', type: 'button', onclick: () => { state.reviewTarget = r; go('avis'); } }, 'Laisser un avis'))));
+      }))),
   ];
 }
 
 const screens = {
   photo: photoScreen, panne: panneScreen, resultat: resultScreen, pros: prosScreen, suivi: trackScreen,
   connexion: loginScreen, envoi: sendingScreen, demandes: requestsScreen, analyse: analysisScreen,
-  supprimer: deleteAccountScreen, contact: contactScreen, envoyee: sentScreen, pro: proScreen, 'pro-demande': proRequestScreen,
+  supprimer: deleteAccountScreen, inscription: signupScreen, oubli: forgotScreen, 'nouveau-mdp': newPasswordScreen, compte: accountScreen, profil: profileScreen, parametres: settingsScreen, 'pro-fiche': proProfileScreen, 'pro-avis': proReviewsScreen, avis: reviewScreen, 'pro-public': publicProScreen, contact: contactScreen, envoyee: sentScreen, pro: proScreen, 'pro-demande': proRequestScreen,
 };
 function render() { app.replaceChildren(...screens[state.screen]().flat().filter(Boolean)); }
 
 async function loadMyPro() {
   if (!backend.signedIn) return;
-  try { state.myPro = await backend.getMyPro(); } catch { state.myPro = null; }
+  const [pro, profile] = await Promise.allSettled([backend.getMyPro(), backend.getProfile()]);
+  state.myPro = pro.value ?? null;
+  state.profile = profile.value ?? null;
 }
 
 async function start() {
@@ -498,6 +861,7 @@ async function start() {
     let outcome;
     try { outcome = await backend.consumeRedirect(hash); } catch (error) { outcome = { error: error.message }; }
     if (outcome.signedIn) await loadMyPro();
+    if (outcome.recovery) { go('nouveau-mdp'); return; }
     if (outcome.signedIn && restoreDraft()) { submitRequest(); return; }
     if (outcome.signedIn) {
       const blob = await takePendingPhoto();
@@ -506,7 +870,7 @@ async function start() {
         runAnalysis();
         return;
       }
-      if (state.myPro) { openProSpace(); return; }
+      go('compte'); return;
     }
     if (outcome.error) {
       state.loginError = outcome.error;

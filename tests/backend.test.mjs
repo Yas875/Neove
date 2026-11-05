@@ -19,7 +19,7 @@ const login = '#access_token=A1&refresh_token=R1&expires_in=3600';
 
 test('la clé publique n’est jamais envoyée comme jeton', async () => {
   const { backend, calls } = setup([{ status: 200, body: {} }]);
-  await backend.sendLoginLink('a@b.fr', 'https://app/');
+  await backend.sendPasswordReset('a@b.fr', 'https://app/');
   assert.equal(calls[0].headers.apikey, 'pub');
   assert.equal(calls[0].headers.Authorization, undefined);
   assert.match(calls[0].url, /redirect_to=https%3A%2F%2Fapp%2F/);
@@ -98,4 +98,43 @@ test('une demande vers un vrai pro transmet la fiche et le téléphone', () => {
   const row = toRequestRow(triage('mecanique', 'bruit', true), 'nice', true, null, 'p1', '0600000000');
   assert.equal(row.pro_id, 'p1');
   assert.equal(row.contact_phone, '0600000000');
+});
+const session = { access_token: 'A', refresh_token: 'R', expires_in: 3600 };
+test('l’inscription ouvre une session, ou demande de confirmer l’e-mail', async () => {
+  const a = setup([{ status: 200, body: session }]);
+  assert.deepEqual(await a.backend.signUp('a@b.fr', 'motdepasse'), { signedIn: true });
+  assert.equal(a.backend.email, 'a@b.fr');
+  const b = setup([{ status: 200, body: { id: 'u' } }]);
+  assert.deepEqual(await b.backend.signUp('a@b.fr', 'motdepasse'), { confirm: true });
+  assert.equal(b.backend.signedIn, false);
+});
+test('un compte déjà existant et un mauvais mot de passe donnent un message clair', async () => {
+  const a = setup([{ status: 422, body: { error_code: 'user_already_exists' } }]);
+  await assert.rejects(a.backend.signUp('a@b.fr', 'motdepasse'), /existe déjà/);
+  const b = setup([{ status: 400, body: { error_code: 'invalid_credentials' } }]);
+  await assert.rejects(b.backend.signIn('a@b.fr', 'x'), /incorrect/);
+  assert.equal(b.backend.signedIn, false);
+});
+test('le mot de passe ne sert qu’à la connexion et n’est pas stocké', async () => {
+  const { backend, calls, data } = setup([{ status: 200, body: session }]);
+  await backend.signIn('a@b.fr', 'secret-123');
+  assert.match(calls[0].url, /grant_type=password/);
+  assert.ok(![...data.values()].join().includes('secret-123'));
+});
+test('le lien de récupération est reconnu', async () => {
+  const { backend } = setup([{ status: 200, body: { email: 'a@b.fr' } }]);
+  assert.deepEqual(await backend.consumeRedirect('#access_token=A1&refresh_token=R1&expires_in=3600&type=recovery'), { signedIn: true, recovery: true });
+});
+test('un second avis donne un message clair', async () => {
+  const { backend } = setup([{ status: 200, body: session }, { status: 409, body: { code: '23505' } }]);
+  await backend.signIn('a@b.fr', 'x');
+  await assert.rejects(backend.submitReview('r', 5, ''), /déjà laissé/);
+});
+test('la case de signature est transmise, et reste décochée par défaut', async () => {
+  const { backend, calls } = setup([{ status: 200, body: session }, { status: 200, body: 'v' }, { status: 200, body: 'v' }]);
+  await backend.signIn('a@b.fr', 'x');
+  await backend.submitReview('r', 5, '');
+  await backend.submitReview('r', 5, '', true);
+  assert.equal(JSON.parse(calls[1].body).p_show_author, false);
+  assert.equal(JSON.parse(calls[2].body).p_show_author, true);
 });
