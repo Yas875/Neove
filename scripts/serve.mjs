@@ -20,4 +20,4 @@ createServer(async (req, res) => {
     const body = await readFile(file);
     res.writeHead(200, { 'content-type': types[extname(file)] ?? 'application/octet-stream' }).end(body);
   } catch { res.writeHead(404).end('Introuvable'); }
-}).listen(port, () => console.log(`Neove : http://localhost:${port}`));
+}).listen(port, () => console.log(`Seravia : http://localhost:${port}`));

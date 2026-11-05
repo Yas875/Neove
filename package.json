@@ -1,9 +1,9 @@
 {
-  "name": "neove-pilote",
+  "name": "seravia-pilote",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Pilote Neove : dépannage nautique sur Nice-Antibes",
+  "description": "Pilote Seravia : dépannage nautique sur Nice-Antibes",
   "scripts": {
     "start": "node scripts/serve.mjs",
     "test": "node --test"

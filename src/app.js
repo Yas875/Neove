@@ -117,7 +117,7 @@ function h(tag, props = {}, ...children) {
 }
 const go = (screen) => { if (screen === 'connexion-retour') { state.loginEmail = null; screen = 'connexion'; } state.screen = screen; render(); window.scrollTo(0, 0); document.querySelector('h1')?.focus(); };
 const header = (title, back) => h('header', { class: 'top' },
-  back ? h('button', { class: 'back', type: 'button', onclick: () => go(back) }, 'Retour') : h('span', { class: 'brand' }, 'Neove'),
+  back ? h('button', { class: 'back', type: 'button', onclick: () => go(back) }, 'Retour') : h('span', { class: 'brand' }, 'Seravia'),
   h('h1', { tabindex: '-1' }, title));
 const choice = (label, selected, onclick) => h('button', {
   class: `choice${selected ? ' is-on' : ''}`, type: 'button', 'aria-pressed': String(Boolean(selected)), onclick,

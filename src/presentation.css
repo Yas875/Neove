@@ -1,8 +1,8 @@
 :root {
-  --ink: #06284a; --foam: #eef6f6; --white: #fff; --line: #9db8c4; --muted: #41596b;
+  --ink: #0a1b33; --night: #0a1b33; --night-2: #142b4d; --text: #f4f7fb; --foam: #0a1b33; --white: #fff; --line: #4a6185; --muted: #b9c7d8;
   --blue: #0f4ea8; --yellow: #ffc800; --red: #c4142a;
   font-family: "Avenir Next", Avenir, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  color: var(--ink); background: var(--foam);
+  color: var(--text); background: var(--night);
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
@@ -10,15 +10,15 @@ html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 body { margin: 0; background: var(--foam); line-height: 1.5; }
 a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
 .bar { display: flex; align-items: center; justify-content: space-between; padding: 1rem clamp(1rem, 4vw, 3rem); }
-.logo { color: var(--blue); font-size: 1.3rem; font-weight: 800; text-decoration: none; }
-.bar-link { color: var(--ink); font-weight: 700; }
+.logo { color: var(--yellow); font-size: 1.3rem; font-weight: 800; text-decoration: none; }
+.bar-link { color: var(--text); font-weight: 700; }
 .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(1.5rem, 5vw, 4rem); align-items: stretch; padding: clamp(1.5rem, 5vw, 4rem) clamp(1rem, 4vw, 3rem) clamp(3rem, 7vw, 6rem); }
 .hero-text { align-self: center; }
-.pilot { display: inline-block; margin: 0 0 1rem; padding: .3rem .7rem; background: var(--yellow); border-radius: 4px; font-weight: 700; }
+.pilot { display: inline-block; margin: 0 0 1rem; padding: .3rem .7rem; background: var(--yellow); color: var(--ink); border-radius: 4px; font-weight: 700; }
 h1 span { display: block; }
 h1 { margin: 0; font-size: clamp(2.7rem, 4.3vw, 5rem); font-weight: 800; line-height: .98; letter-spacing: -.035em; }
 .lead { max-width: 34rem; margin: 1.5rem 0 0; font-size: clamp(1.15rem, 2vw, 1.4rem); }
-.cta { display: inline-block; margin-top: 2rem; padding: 1.05rem 1.6rem; border-radius: 6px; background: var(--ink); color: var(--white); font-size: 1.1rem; font-weight: 800; text-decoration: none; }
+.cta { display: inline-block; margin-top: 2rem; padding: 1.05rem 1.6rem; border-radius: 6px; background: var(--yellow); color: var(--ink); font-size: 1.1rem; font-weight: 800; text-decoration: none; }
 .flags { display: grid; grid-template-rows: 1.25fr 1fr 1fr; min-height: 30rem; border-radius: 6px; overflow: hidden; }
 .flag { display: flex; flex-direction: column; justify-content: flex-end; padding: 1.25rem 1.5rem; }
 .flag strong { font-size: clamp(2.2rem, 5vw, 4rem); font-weight: 800; line-height: 1; letter-spacing: -.02em; }
@@ -26,23 +26,23 @@ h1 { margin: 0; font-size: clamp(2.7rem, 4.3vw, 5rem); font-weight: 800; line-he
 .flag-red { background: var(--red); color: var(--white); }
 .flag-yellow { background: var(--yellow); color: var(--ink); }
 .flag-blue { background: var(--blue); color: var(--white); }
-.block { padding: clamp(2.5rem, 6vw, 5rem) clamp(1rem, 4vw, 3rem); border-top: 2px solid var(--ink); }
+.block { padding: clamp(2.5rem, 6vw, 5rem) clamp(1rem, 4vw, 3rem); border-top: 1px solid var(--line); }
 h2 { max-width: 20ch; margin: 0 0 2rem; font-size: clamp(2rem, 4.5vw, 3.4rem); font-weight: 800; line-height: 1.05; letter-spacing: -.025em; }
 h3 { margin: 0 0 .4rem; font-size: 1.3rem; line-height: 1.2; }
 p { margin: 0; }
 .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2rem; margin: 0; padding: 0; list-style: none; counter-reset: step; }
 .steps li { counter-increment: step; }
-.steps li::before { content: counter(step); display: block; margin-bottom: .75rem; color: var(--blue); font-size: 3rem; font-weight: 800; line-height: 1; }
+.steps li::before { content: counter(step); display: block; margin-bottom: .75rem; color: var(--yellow); font-size: 3rem; font-weight: 800; line-height: 1; }
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 2rem; }
 .two h2 { margin: 0; }
 .trades { margin: 0; padding: 0; list-style: none; }
 .trades li { padding: 1.1rem 0; border-top: 1px solid var(--line); }
 .trades li:first-child { padding-top: 0; border-top: 0; }
-.honest { background: var(--white); }
+.honest { background: var(--night-2); }
 .honest dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; margin: 0; }
 .honest dt { margin-bottom: .4rem; font-size: 1.2rem; font-weight: 800; }
 .honest dd { margin: 0; color: var(--muted); }
-.pros { border-top: 0; background: var(--ink); color: var(--white); }
+.pros { background: var(--night); color: var(--white); }
 .pros p { max-width: 42rem; margin-top: 1rem; font-size: 1.15rem; }
 .cta-light { background: var(--yellow); color: var(--ink); }
 .pros .cta:focus-visible { outline-color: var(--yellow); }
