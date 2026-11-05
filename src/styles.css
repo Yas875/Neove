@@ -100,7 +100,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .star.is-on { color: var(--accent); }
 .reviews { list-style: none; margin: 1rem 0 0; padding: 0; }
 .reviews li { padding: 1rem 0; border-bottom: 1px solid var(--line); }
-.reviews .rate { color: var(--accent); font-weight: 700; }
+.reviews .rate, .admin-list .rate { color: var(--accent); font-weight: 700; }
 .reviews time { display: block; color: var(--soft); font-size: .88rem; }
 .reviews p { margin: .4rem 0 0; }
 .reply { padding-left: .8rem; border-left: 2px solid var(--line); color: var(--soft); }
@@ -149,3 +149,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 @keyframes hop { 40% { transform: translateY(-10px); } }
 @keyframes shake-left { 0%, 14%, 38%, 100% { transform: rotate(0); } 20% { transform: rotate(-5deg); } 26% { transform: rotate(4deg); } 32% { transform: rotate(-3deg); } }
 @keyframes shake-right { 0%, 14%, 38%, 100% { transform: rotate(0); } 20% { transform: rotate(4deg); } 26% { transform: rotate(-3.2deg); } 32% { transform: rotate(2.4deg); } }
+.admin-list { list-style: none; margin: 1rem 0 0; padding: 0; }
+.admin-list > li { padding: 1.1rem 0; border-bottom: 1px solid var(--line); }
+.admin-list p { margin: .35rem 0 0; }
+.admin-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.admin-head small { color: var(--soft); }
+.admin-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.pick-main { border-color: var(--accent); background: var(--accent); color: var(--ink); }
+.badge { color: var(--accent) !important; font-weight: 700; }
+.badge-gap { margin-left: .6rem; }
+.note-inline { display: block; color: var(--soft); font-size: .9rem; }

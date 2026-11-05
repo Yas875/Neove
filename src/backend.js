@@ -207,7 +207,7 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     async getMyPro() {
       const token = await validToken();
       if (!token) return null;
-      const rows = await call(`/rest/v1/pros?select=id,name,verified,category,location,phone,siret,description&user_id=eq.${userIdFromToken(token)}&limit=1`, { token });
+      const rows = await call(`/rest/v1/pros?select=id,name,verified,rejected,category,location,phone,siret,description&user_id=eq.${userIdFromToken(token)}&limit=1`, { token });
       return rows[0] ?? null;
     },
 
@@ -276,6 +276,26 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
 
     replyToReview(reviewId, reply) {
       return authed('/rest/v1/rpc/pro_reply_review', { method: 'POST', body: { p_review_id: reviewId, p_reply: reply } });
+    },
+
+    isAdmin() {
+      return authed('/rest/v1/rpc/is_admin', { method: 'POST', body: {} });
+    },
+    adminListPros() {
+      return authed('/rest/v1/rpc/admin_list_pros', { method: 'POST', body: {} });
+    },
+    adminSetPro(proId, action) {
+      return authed('/rest/v1/rpc/admin_set_pro', { method: 'POST', body: { p_pro_id: proId, p_action: action } });
+    },
+    adminListReviews() {
+      return authed('/rest/v1/rpc/admin_list_reviews', { method: 'POST', body: {} });
+    },
+    adminSetReviewHidden(reviewId, hidden) {
+      return authed('/rest/v1/rpc/admin_set_review_hidden', { method: 'POST', body: { p_review_id: reviewId, p_hidden: hidden } });
+    },
+    async adminClearReviewAvatar(reviewId) {
+      const path = await authed('/rest/v1/rpc/admin_clear_review_avatar', { method: 'POST', body: { p_review_id: reviewId } });
+      if (path) await this.removeAvatarFile(path).catch(() => {});
     },
 
     listRequests() {

@@ -13,7 +13,7 @@ const state = {
   deleting: false, deleteError: null, accountDeleted: false, realPros: null, phone: '', myPro: null, proRequests: null, proError: null, proCurrent: null, proPhoto: null, proBusy: false,
   photoBlob: null, photoPath: null, photoError: null, suggestion: null, analysisError: null, loginBack: 'photo', loginTitle: '', afterLogin: null,
   form: {}, formError: null, formInfo: null, busy: false, profile: null, signupKind: 'client', notice: null,
-  reviewed: [], reviewTarget: null, proReviews: null, proView: null, ratings: [],
+  isAdmin: false, adminPros: null, adminReviews: null, reviewed: [], reviewTarget: null, proReviews: null, proView: null, ratings: [],
 };
 
 function safeStorage() {
@@ -308,9 +308,9 @@ function describeRequest(r) {
 
 function proScreen() {
   return [
-    header(state.myPro.verified ? 'Demandes reçues' : 'Fiche en attente de vérification', 'compte'),
+    header(state.myPro.verified ? 'Demandes reçues' : state.myPro.rejected ? 'Fiche non validée' : 'Fiche en attente de vérification', 'compte'),
     h('main', {},
-      !state.myPro.verified && h('p', { class: 'lead' }, 'Vous recevrez des demandes une fois votre fiche vérifiée par Seravia.'),
+      !state.myPro.verified && h('p', { class: 'lead' }, state.myPro.rejected ? 'Corrigez votre fiche pour la soumettre de nouveau.' : 'Vous recevrez des demandes une fois votre fiche vérifiée par Seravia.'),
       state.proError && h('p', { class: 'error', role: 'alert' }, state.proError),
       !state.proRequests && !state.proError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
       state.proRequests?.length === 0 && state.myPro.verified && h('p', { class: 'lead' }, 'Aucune demande pour l’instant.'),
@@ -377,7 +377,7 @@ function deleteAccountScreen() {
         try {
           await backend.deleteAccount();
           clearDraft(); await takePendingPhoto();
-          state.myPro = null; state.profile = null; resetFlow(); state.deleting = false; state.accountDeleted = true;
+          state.myPro = null; state.profile = null; state.isAdmin = false; resetFlow(); state.deleting = false; state.accountDeleted = true;
           go('photo');
         } catch (error) { state.deleting = false; state.deleteError = error.message; render(); }
       } }, state.deleting ? 'Suppression en cours' : 'Supprimer définitivement'),
@@ -594,12 +594,16 @@ function accountScreen() {
         ? [h('h2', { class: 'section-title' }, 'Espace intervenant'),
           h('ul', { class: 'menu' },
             menuItem('Demandes reçues', openProSpace),
-            menuItem('Ma fiche', () => go('pro-fiche'), state.myPro.verified ? 'Vérifiée' : 'En attente de vérification'),
+            menuItem('Ma fiche', () => go('pro-fiche'), state.myPro.verified ? 'Vérifiée' : state.myPro.rejected ? 'Refusée' : 'En attente de vérification'),
             menuItem('Mes avis', openProReviews))]
         : h('button', { class: 'link', type: 'button', onclick: () => go('pro-fiche') }, 'Vous êtes intervenant ? Créer ma fiche'),
+      state.isAdmin && [h('h2', { class: 'section-title' }, 'Administration'),
+        h('ul', { class: 'menu' },
+          menuItem('Intervenants à vérifier', openAdminPros),
+          menuItem('Avis et photos', openAdminReviews))],
       h('button', { class: 'secondary', type: 'button', onclick: async () => {
         await backend.signOut();
-        Object.assign(state, { myPro: null, profile: null, reviewed: [] });
+        Object.assign(state, { myPro: null, profile: null, reviewed: [], isAdmin: false });
         resetFlow(); go('photo');
       } }, 'Se déconnecter')),
   ];
@@ -684,7 +688,9 @@ function proProfileScreen() {
     h('main', {},
       h('p', { class: 'status' }, p.verified
         ? 'Fiche vérifiée et visible des clients. Changer le nom, le métier ou le SIRET la renverra en vérification.'
-        : 'Votre fiche reste invisible des clients tant que Seravia ne l’a pas vérifiée.'),
+        : p.rejected
+          ? 'Votre fiche n’a pas été validée. Corrigez-la et enregistrez-la pour la soumettre de nouveau.'
+          : 'Votre fiche reste invisible des clients tant que Seravia ne l’a pas vérifiée.'),
       messages(),
       h('form', { onsubmit: (e) => {
         e.preventDefault();
@@ -706,6 +712,79 @@ function proProfileScreen() {
       field('Présentation (facultatif)', 'description', { type: 'textarea', maxlength: '500' }, p.description),
       h('p', { class: 'note' }, 'Le nom, le métier, le téléphone et la présentation sont affichés aux clients une fois la fiche vérifiée.'),
       submit('Enregistrer ma fiche', 'Enregistrement'))),
+  ];
+}
+
+async function openAdminPros() {
+  state.adminPros = null;
+  go('admin-pros');
+  try { state.adminPros = await backend.adminListPros(); } catch (error) { state.formError = error.message; }
+  render();
+}
+const proStatus = (p) => (p.verified ? 'Vérifiée' : p.rejected ? 'Refusée' : 'En attente');
+function adminProsScreen() {
+  const list = state.adminPros;
+  const act = (p, action, info) => h('button', {
+    class: action === 'valider' ? 'pick pick-main' : 'pick', type: 'button', disabled: state.busy,
+    onclick: () => runForm(async () => {
+      await backend.adminSetPro(p.id, action);
+      state.adminPros = await backend.adminListPros();
+      state.formInfo = `${p.name} : ${info}.`;
+    }),
+  }, { valider: 'Valider', refuser: 'Refuser', retirer: 'Retirer la validation' }[action]);
+  return [
+    header('Intervenants', 'compte'),
+    h('main', {},
+      messages(),
+      !list && !state.formError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
+      list?.length === 0 && h('p', { class: 'lead' }, 'Aucune fiche pour l’instant.'),
+      list?.length > 0 && h('ul', { class: 'admin-list' }, list.map((p) => h('li', {},
+        h('div', { class: 'admin-head' }, h('strong', {}, p.name), h('small', { class: p.verified || p.rejected ? '' : 'badge' }, proStatus(p))),
+        h('p', {}, [CATEGORIES.find((c) => c.id === p.category)?.trade, LOCATIONS.find((l) => l.id === p.location)?.label].filter(Boolean).join(', ')),
+        p.phone && h('p', {}, h('a', { href: `tel:${p.phone.replace(/[^+\d]/g, '')}` }, p.phone)),
+        p.siret
+          ? h('p', {}, `SIRET ${p.siret} : `, h('a', { href: `https://annuaire-entreprises.data.gouv.fr/etablissement/${encodeURIComponent(p.siret)}`, target: '_blank', rel: 'noopener noreferrer' }, 'vérifier l’entreprise'))
+          : h('p', { class: 'note' }, 'Aucun SIRET renseigné.'),
+        p.description && h('p', { class: 'note' }, p.description),
+        h('div', { class: 'admin-actions' },
+          !p.verified && act(p, 'valider', 'fiche validée'),
+          !p.verified && !p.rejected && act(p, 'refuser', 'fiche refusée'),
+          p.verified && act(p, 'retirer', 'validation retirée')))))),
+  ];
+}
+
+async function openAdminReviews() {
+  state.adminReviews = null;
+  go('admin-avis');
+  try { state.adminReviews = await backend.adminListReviews(); } catch (error) { state.formError = error.message; }
+  render();
+}
+function adminReviewsScreen() {
+  const list = state.adminReviews;
+  const refresh = async (info) => { state.adminReviews = await backend.adminListReviews(); state.formInfo = info; };
+  return [
+    header('Avis et photos', 'compte'),
+    h('main', {},
+      messages(),
+      !list && !state.formError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
+      list?.length === 0 && h('p', { class: 'lead' }, 'Aucun avis pour l’instant.'),
+      list?.length > 0 && h('ul', { class: 'admin-list' }, list.map((r) => h('li', {},
+        h('div', { class: 'review-head' }, avatar(r.avatar_path),
+          h('div', {},
+            h('strong', { class: 'review-author' }, r.author_name ?? 'Auteur sans nom'),
+            h('span', { class: 'note-inline' }, `Sur ${r.pro_name}${r.show_author ? ', avis signé' : ', avis anonyme'}`))),
+        h('p', {}, h('span', { class: 'rate', 'aria-label': `${r.rating} sur 5` }, '★'.repeat(r.rating)), r.hidden && h('small', { class: 'badge badge-gap' }, 'Masqué')),
+        r.comment && h('p', {}, r.comment),
+        r.reply && h('p', { class: 'reply' }, `Réponse : ${r.reply}`),
+        h('div', { class: 'admin-actions' },
+          h('button', { class: 'pick', type: 'button', disabled: state.busy, onclick: () => runForm(async () => {
+            await backend.adminSetReviewHidden(r.id, !r.hidden);
+            await refresh(r.hidden ? 'Avis de nouveau visible.' : 'Avis masqué.');
+          }) }, r.hidden ? 'Réafficher' : 'Masquer l’avis'),
+          r.avatar_path && h('button', { class: 'pick', type: 'button', disabled: state.busy, onclick: () => runForm(async () => {
+            await backend.adminClearReviewAvatar(r.id);
+            await refresh('Photo supprimée.');
+          }) }, 'Retirer la photo')))))),
   ];
 }
 
@@ -876,15 +955,16 @@ function requestsScreen() {
 const screens = {
   photo: photoScreen, panne: panneScreen, resultat: resultScreen, pros: prosScreen, suivi: trackScreen,
   connexion: loginScreen, envoi: sendingScreen, demandes: requestsScreen, analyse: analysisScreen,
-  supprimer: deleteAccountScreen, inscription: signupScreen, oubli: forgotScreen, 'nouveau-mdp': newPasswordScreen, compte: accountScreen, profil: profileScreen, parametres: settingsScreen, 'pro-fiche': proProfileScreen, 'pro-avis': proReviewsScreen, avis: reviewScreen, 'pro-public': publicProScreen, contact: contactScreen, envoyee: sentScreen, pro: proScreen, 'pro-demande': proRequestScreen,
+  supprimer: deleteAccountScreen, inscription: signupScreen, oubli: forgotScreen, 'nouveau-mdp': newPasswordScreen, compte: accountScreen, profil: profileScreen, parametres: settingsScreen, 'pro-fiche': proProfileScreen, 'pro-avis': proReviewsScreen, avis: reviewScreen, 'pro-public': publicProScreen, 'admin-pros': adminProsScreen, 'admin-avis': adminReviewsScreen, contact: contactScreen, envoyee: sentScreen, pro: proScreen, 'pro-demande': proRequestScreen,
 };
 function render() { app.replaceChildren(...screens[state.screen]().flat().filter(Boolean)); }
 
 async function loadMyPro() {
   if (!backend.signedIn) return;
-  const [pro, profile] = await Promise.allSettled([backend.getMyPro(), backend.getProfile()]);
+  const [pro, profile, admin] = await Promise.allSettled([backend.getMyPro(), backend.getProfile(), backend.isAdmin()]);
   state.myPro = pro.value ?? null;
   state.profile = profile.value ?? null;
+  state.isAdmin = admin.value === true;
 }
 
 async function start() {
