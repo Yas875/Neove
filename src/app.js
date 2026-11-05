@@ -216,10 +216,10 @@ function resultScreen() {
       h('dl', { class: 'facts' },
         h('dt', {}, 'Constat'), h('dd', {}, r.symptom.label),
         h('dt', {}, 'Métier conseillé'), h('dd', {}, r.category.trade),
-        h('dt', {}, 'Prix estimé'), h('dd', {}, `${r.price.min} à ${r.price.max} €`)),
+        h('dt', {}, 'Premier repère de prix'), h('dd', {}, `${r.price.min} à ${r.price.max} €`)),
       h('p', { class: 'note' }, state.suggestion?.recognized
-        ? 'Estimation à partir de la photo et de vos réponses. Elle ne remplace pas le diagnostic d’un professionnel et le prix reste indicatif.'
-        : 'Estimation à partir de vos réponses. Elle ne remplace pas le diagnostic d’un professionnel et le prix reste indicatif.'),
+        ? 'Ce repère vient de la photo et de vos réponses. Le prix réel dépend du modèle, de l’entretien et de l’état de la pièce : le professionnel le confirme après diagnostic, et il peut être bien plus élevé.'
+        : 'Ce repère vient de vos réponses. Le prix réel dépend du modèle, de l’entretien et de l’état de la pièce : le professionnel le confirme après diagnostic, et il peut être bien plus élevé.'),
       primary('Trouver un intervenant', () => go('pros'))),
   ];
 }
@@ -349,7 +349,7 @@ function proRequestScreen() {
         h('dt', {}, 'État'), h('dd', {}, STATUS_LABELS[r.status] ?? r.status),
         h('dt', {}, 'Lieu'), h('dd', {}, `${d.place}, ${r.afloat ? 'à flot' : 'à terre'}`),
         h('dt', {}, 'Urgence'), h('dd', {}, urgencyLevel(r.urgency_score).label),
-        h('dt', {}, 'Prix indicatif affiché au client'), h('dd', {}, `${r.price_min} à ${r.price_max} €`),
+        h('dt', {}, 'Repère de prix affiché au client'), h('dd', {}, `${r.price_min} à ${r.price_max} €`),
         r.contact_phone && r.status !== 'refusee' && [h('dt', {}, 'Téléphone du client'), h('dd', {}, h('a', { href: `tel:${r.contact_phone.replace(/[^+\d]/g, '')}` }, r.contact_phone))]),
       (PRO_ACTIONS[r.status] ?? []).map(([action, label]) => h('button', {
         class: action === 'refuser' || action === 'annuler' ? 'secondary' : 'primary', type: 'button', disabled: state.proBusy, onclick: () => runProAction(action),
