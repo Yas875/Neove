@@ -2,7 +2,7 @@
 const SESSION_KEY = 'neove.session';
 
 export class BackendError extends Error {
-  constructor(message, status) { super(message); this.status = status; }
+  constructor(message, status, code) { super(message); this.status = status; this.code = code; }
 }
 
 function friendly(status) {
@@ -28,7 +28,11 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     } catch {
       throw new BackendError('Connexion impossible. Vérifiez votre réseau, puis réessayez.', 0);
     }
-    if (!res.ok) throw new BackendError(friendly(res.status), res.status);
+    if (!res.ok) {
+      let code;
+      try { const data = JSON.parse(await res.text()); code = data?.error_code ?? data?.code; } catch { /* réponse sans détail */ }
+      throw new BackendError(friendly(res.status), res.status, code);
+    }
     if (binary) return res.blob();
     const text = await res.text();
     return text ? JSON.parse(text) : null;
@@ -74,14 +78,68 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     return call(path, { ...options, token });
   }
 
+  function startSession(data, email) {
+    writeSession({
+      access_token: data.access_token, refresh_token: data.refresh_token,
+      expires_at: now() + data.expires_in * 1000, email: data.user?.email ?? email,
+    });
+  }
+
   return {
     get email() { return memory?.email ?? null; },
     get signedIn() { return Boolean(memory); },
 
-    sendLoginLink(email, redirectTo) {
-      return call(`/auth/v1/otp?redirect_to=${encodeURIComponent(redirectTo)}`, {
-        method: 'POST', body: { email, create_user: true },
+    async signUp(email, password) {
+      try {
+        const data = await call('/auth/v1/signup', { method: 'POST', body: { email, password } });
+        if (!data?.access_token) return { confirm: true };
+        startSession(data, email);
+        return { signedIn: true };
+      } catch (error) {
+        if (error.code === 'user_already_exists' || error.code === 'email_exists') throw new BackendError('Un compte existe déjà avec cet e-mail. Connectez-vous.', error.status, error.code);
+        if (error.code === 'weak_password') throw new BackendError('Ce mot de passe est trop simple. Choisissez-en un plus long.', error.status, error.code);
+        if (error.code === 'validation_failed' || error.code === 'email_address_invalid') throw new BackendError('Vérifiez l’adresse e-mail.', error.status, error.code);
+        throw error;
+      }
+    },
+
+    async signIn(email, password) {
+      try {
+        const data = await call('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password } });
+        startSession(data, email);
+      } catch (error) {
+        if (error.code === 'email_not_confirmed') throw new BackendError('Confirmez d’abord votre adresse avec le lien reçu par e-mail.', error.status, error.code);
+        if (error.status === 400) throw new BackendError('E-mail ou mot de passe incorrect.', 400, error.code);
+        throw error;
+      }
+    },
+
+    sendPasswordReset(email, redirectTo) {
+      return call(`/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, { method: 'POST', body: { email } });
+    },
+
+    async changePassword(password) {
+      try {
+        await authed('/auth/v1/user', { method: 'PUT', body: { password } });
+      } catch (error) {
+        if (error.code === 'weak_password' || error.code === 'same_password') throw new BackendError('Choisissez un mot de passe différent et plus long.', error.status, error.code);
+        throw error;
+      }
+    },
+
+    async getProfile() {
+      const rows = await authed('/rest/v1/profiles?select=full_name,phone,home_location&limit=1');
+      return rows[0] ?? null;
+    },
+
+    async saveProfile(profile) {
+      const token = await validToken();
+      if (!token) throw new BackendError('Connectez-vous pour continuer.', 401);
+      const rows = await call('/rest/v1/profiles?on_conflict=user_id', {
+        method: 'POST', token, body: { ...profile, user_id: userIdFromToken(token), updated_at: new Date(now()).toISOString() },
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
       });
+      return rows[0];
     },
 
     // Lit le retour du lien reçu par e-mail. Le jeton n'est accepté qu'après contrôle par le serveur.
@@ -99,7 +157,7 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
         access_token: accessToken, refresh_token: params.get('refresh_token'),
         expires_at: now() + Number(params.get('expires_in') ?? 3600) * 1000, email: user.email,
       });
-      return { signedIn: true };
+      return params.get('type') === 'recovery' ? { signedIn: true, recovery: true } : { signedIn: true };
     },
 
     async deleteAccount() {
@@ -143,13 +201,13 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
 
     // Fiches réelles et vérifiées, visibles sans connexion. Une liste vide garde l'app en démonstration.
     listPros() {
-      return call('/rest/v1/pros?select=id,name,category,lat,lng,phone,verified');
+      return call('/rest/v1/pros?select=id,name,category,lat,lng,phone,verified,description');
     },
 
     async getMyPro() {
       const token = await validToken();
       if (!token) return null;
-      const rows = await call(`/rest/v1/pros?select=id,name,verified&user_id=eq.${userIdFromToken(token)}&limit=1`, { token });
+      const rows = await call(`/rest/v1/pros?select=id,name,verified,category,location,phone,siret,description&user_id=eq.${userIdFromToken(token)}&limit=1`, { token });
       return rows[0] ?? null;
     },
 
@@ -165,8 +223,40 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
       return authed(`/storage/v1/object/request-photos/${path}`, { binary: true });
     },
 
+    saveProProfile(pro) {
+      return authed('/rest/v1/rpc/pro_save_profile', { method: 'POST', body: {
+        p_name: pro.name, p_category: pro.category, p_location: pro.location,
+        p_phone: pro.phone, p_siret: pro.siret, p_description: pro.description,
+      } });
+    },
+
+    listRatings() {
+      return call('/rest/v1/reviews?select=pro_id,rating');
+    },
+
+    listProReviews(proId) {
+      return call(`/rest/v1/reviews?select=id,rating,comment,reply,replied_at,created_at&pro_id=eq.${encodeURIComponent(proId)}&order=created_at.desc&limit=50`);
+    },
+
+    async submitReview(requestId, rating, comment) {
+      try {
+        return await authed('/rest/v1/rpc/submit_review', { method: 'POST', body: { p_request_id: requestId, p_rating: rating, p_comment: comment } });
+      } catch (error) {
+        if (error.code === '23505') throw new BackendError('Vous avez déjà laissé un avis pour cette intervention.', error.status, error.code);
+        throw error;
+      }
+    },
+
+    myReviewedRequests() {
+      return authed('/rest/v1/rpc/my_reviewed_requests', { method: 'POST', body: {} });
+    },
+
+    replyToReview(reviewId, reply) {
+      return authed('/rest/v1/rpc/pro_reply_review', { method: 'POST', body: { p_review_id: reviewId, p_reply: reply } });
+    },
+
     listRequests() {
-      return authed('/rest/v1/requests?select=id,category,symptom,location,status,price_min,price_max,created_at&order=created_at.desc&limit=50');
+      return authed('/rest/v1/requests?select=id,pro_id,category,symptom,location,status,price_min,price_max,created_at&order=created_at.desc&limit=50');
     },
   };
 }
