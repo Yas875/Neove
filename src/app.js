@@ -352,7 +352,7 @@ function proRequestScreen() {
     header(d.symptom, 'pro'),
     h('main', {},
       state.proError && h('p', { class: 'error', role: 'alert' }, state.proError),
-      state.proPhoto && h('img', { class: 'pro-photo', src: state.proPhoto, alt: 'Photo envoyée par le plaisancier' }),
+      state.proPhoto && h('img', { class: 'pro-photo', src: state.proPhoto, alt: 'Photo envoyée par le client' }),
       h('dl', { class: 'facts' },
         h('dt', {}, 'État'), h('dd', {}, STATUS_LABELS[r.status] ?? r.status),
         h('dt', {}, 'Lieu'), h('dd', {}, `${d.place}, ${r.afloat ? 'à flot' : 'à terre'}`),
@@ -371,7 +371,7 @@ function deleteAccountScreen() {
     h('main', {},
       state.deleteError && h('p', { class: 'error', role: 'alert' }, state.deleteError),
       h('p', { class: 'lead' }, 'Votre compte, votre profil, vos demandes, vos avis et vos photos seront supprimés définitivement. Cette action ne peut pas être annulée.'),
-      state.myPro && h('p', { class: 'note' }, 'Votre fiche d’intervenant ne sera plus proposée aux plaisanciers.'),
+      state.myPro && h('p', { class: 'note' }, 'Votre fiche d’intervenant ne sera plus proposée aux clients.'),
       h('button', { class: 'primary danger-action', type: 'button', disabled: state.deleting, onclick: async () => {
         state.deleting = true; state.deleteError = null; render();
         try {
