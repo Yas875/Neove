@@ -1,5 +1,5 @@
 :root {
-  --ink: #0a1b33; --night: #0a1b33; --night-2: #142b4d; --text: #f4f7fb; --foam: #0a1b33; --white: #fff; --line: #9db8c4; --muted: #41596b; --soft: #b9c7d8;
+  --ink: #050a30; --night: #050a30; --night-2: #10184a; --text: #f4f7fb; --foam: #050a30; --white: #fff; --line: #9db8c4; --muted: #41596b; --soft: #b9c7d8;
   --blue: #0f4ea8; --yellow: #ffc800; --red: #c4142a;
   font-family: "Avenir Next", Avenir, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   color: var(--text); background: var(--night);
@@ -9,7 +9,8 @@ html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--foam); line-height: 1.45; }
 #app { max-width: 34rem; margin: 0 auto; min-height: 100dvh; }
 .top { padding: 1.25rem 1rem .5rem; }
-.brand { font-weight: 800; font-size: 1.05rem; color: var(--yellow); }
+.brand { display: inline-flex; align-items: center; gap: .5rem; font-weight: 800; font-size: 1.05rem; color: var(--white); }
+.brand img { border-radius: 6px; }
 h1 { margin: .5rem 0 0; font-size: 2.15rem; line-height: 1.08; font-weight: 800; letter-spacing: -.02em; }
 h1:focus { outline: none; }
 h2 { margin: 1.5rem 0 .6rem; font-size: 1.05rem; }
