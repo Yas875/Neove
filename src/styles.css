@@ -136,8 +136,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .fig-arm-left { transform-origin: 166px 256px; }
 .fig-arm-right { transform-origin: 420px 322px; }
 @media (prefers-reduced-motion: no-preference) {
-  .fig-arm-left { animation: shake-left 5s ease-in-out infinite; }
-  .fig-arm-right { animation: shake-right 5s ease-in-out infinite; }
+  .stage-wait .role-client .figure { opacity: 0; transform: translateX(-40px); }
+  .stage-wait .role-pro .figure { opacity: 0; transform: translateX(40px); }
+  .stage-play .fig-arm-left { animation: shake-left 5s ease-in-out .7s infinite; }
+  .stage-play .fig-arm-right { animation: shake-right 5s ease-in-out .7s infinite; }
   .stage-enter .role-client .figure { animation: come-left .7s cubic-bezier(.2, .8, .2, 1) both; }
   .stage-enter .role-pro .figure { animation: come-right .7s cubic-bezier(.2, .8, .2, 1) both; }
   .role.is-on .figure { animation: hop .45s ease-out; }
