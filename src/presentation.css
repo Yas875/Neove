@@ -19,7 +19,7 @@ a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 h1 span { display: block; }
 h1 { margin: 0; font-size: clamp(2.7rem, 4.3vw, 5rem); font-weight: 800; line-height: .98; letter-spacing: -.035em; }
 .lead { max-width: 34rem; margin: 1.5rem 0 0; font-size: clamp(1.15rem, 2vw, 1.4rem); }
-.cta { display: inline-block; margin-top: 2rem; padding: 1rem 1.6rem; border-radius: 10px; background: var(--accent); color: var(--ink); font-size: 1.05rem; font-weight: 700; text-decoration: none; }
+.cta { display: inline-block; margin-top: 2rem; padding: .7rem 1.25rem; border-radius: 10px; background: var(--accent); color: var(--ink); font-size: .95rem; font-weight: 700; text-decoration: none; }
 .flags { display: grid; align-content: center; gap: 0; }
 .flag { display: flex; flex-direction: column; padding: 1.4rem 0; border-top: 1px solid var(--line); }
 .flag strong { font-size: clamp(1.8rem, 3.2vw, 2.6rem); font-weight: 800; line-height: 1.05; letter-spacing: -.02em; }
