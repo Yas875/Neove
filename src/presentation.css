@@ -1,6 +1,6 @@
 :root {
   --ink: #050a30; --night: #050a30; --night-2: #10184a; --text: #f4f7fb; --foam: #050a30; --white: #fff; --line: #4a6185; --muted: #b9c7d8;
-  --blue: #0f4ea8; --yellow: #ffc800; --red: #c4142a;
+  --blue: #10184a; --sky: #8ec9ff; --red: #c92a40;
   font-family: "Avenir Next", Avenir, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   color: var(--text); background: var(--night);
 }
@@ -8,32 +8,32 @@
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 body { margin: 0; background: var(--foam); line-height: 1.5; }
-a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+a:focus-visible { outline: 3px solid var(--sky); outline-offset: 3px; }
 .bar { display: flex; align-items: center; justify-content: space-between; padding: 1rem clamp(1rem, 4vw, 3rem); }
 .logo { display: inline-flex; align-items: center; gap: .6rem; color: var(--white); font-size: 1.3rem; font-weight: 800; text-decoration: none; }
 .logo img { border-radius: 6px; }
 .bar-link { color: var(--text); font-weight: 700; }
 .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(1.5rem, 5vw, 4rem); align-items: stretch; padding: clamp(1.5rem, 5vw, 4rem) clamp(1rem, 4vw, 3rem) clamp(3rem, 7vw, 6rem); }
 .hero-text { align-self: center; }
-.pilot { display: inline-block; margin: 0 0 1rem; padding: .3rem .7rem; background: var(--yellow); color: var(--ink); border-radius: 4px; font-weight: 700; }
+.pilot { display: inline-block; margin: 0 0 1rem; padding: .3rem .7rem; background: var(--sky); color: var(--ink); border-radius: 4px; font-weight: 700; }
 h1 span { display: block; }
 h1 { margin: 0; font-size: clamp(2.7rem, 4.3vw, 5rem); font-weight: 800; line-height: .98; letter-spacing: -.035em; }
 .lead { max-width: 34rem; margin: 1.5rem 0 0; font-size: clamp(1.15rem, 2vw, 1.4rem); }
-.cta { display: inline-block; margin-top: 2rem; padding: 1.05rem 1.6rem; border-radius: 6px; background: var(--yellow); color: var(--ink); font-size: 1.1rem; font-weight: 800; text-decoration: none; }
+.cta { display: inline-block; margin-top: 2rem; padding: 1.05rem 1.6rem; border-radius: 6px; background: var(--white); color: var(--ink); font-size: 1.1rem; font-weight: 800; text-decoration: none; }
 .flags { display: grid; grid-template-rows: 1.25fr 1fr 1fr; min-height: 30rem; border-radius: 6px; overflow: hidden; }
 .flag { display: flex; flex-direction: column; justify-content: flex-end; padding: 1.25rem 1.5rem; }
 .flag strong { font-size: clamp(2.2rem, 5vw, 4rem); font-weight: 800; line-height: 1; letter-spacing: -.02em; }
 .flag span { margin-top: .4rem; font-size: 1.05rem; font-weight: 600; }
 .flag-red { background: var(--red); color: var(--white); }
-.flag-yellow { background: var(--yellow); color: var(--ink); }
-.flag-blue { background: var(--blue); color: var(--white); }
+.flag-sky { background: var(--sky); color: var(--ink); }
+.flag-blue { background: var(--blue); color: var(--white); border: 1px solid var(--sky); }
 .block { padding: clamp(2.5rem, 6vw, 5rem) clamp(1rem, 4vw, 3rem); border-top: 1px solid var(--line); }
 h2 { max-width: 20ch; margin: 0 0 2rem; font-size: clamp(2rem, 4.5vw, 3.4rem); font-weight: 800; line-height: 1.05; letter-spacing: -.025em; }
 h3 { margin: 0 0 .4rem; font-size: 1.3rem; line-height: 1.2; }
 p { margin: 0; }
 .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2rem; margin: 0; padding: 0; list-style: none; counter-reset: step; }
 .steps li { counter-increment: step; }
-.steps li::before { content: counter(step); display: block; margin-bottom: .75rem; color: var(--yellow); font-size: 3rem; font-weight: 800; line-height: 1; }
+.steps li::before { content: counter(step); display: block; margin-bottom: .75rem; color: var(--sky); font-size: 3rem; font-weight: 800; line-height: 1; }
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 2rem; }
 .two h2 { margin: 0; }
 .trades { margin: 0; padding: 0; list-style: none; }
@@ -45,9 +45,9 @@ p { margin: 0; }
 .honest dd { margin: 0; color: var(--muted); }
 .pros { background: var(--night); color: var(--white); }
 .pros p { max-width: 42rem; margin-top: 1rem; font-size: 1.15rem; }
-.cta-light { background: var(--yellow); color: var(--ink); }
-.pros .cta:focus-visible { outline-color: var(--yellow); }
-.danger { padding: 2rem clamp(1rem, 4vw, 3rem); background: var(--red); color: var(--white); }
+.cta-light { background: var(--white); color: var(--ink); }
+.pros .cta:focus-visible { outline-color: var(--sky); }
+.danger { padding: 2rem clamp(1rem, 4vw, 3rem); background: var(--night-2); border-left: 8px solid var(--red); color: var(--white); }
 .danger h2 { max-width: none; margin: 0 0 .4rem; font-size: clamp(1.5rem, 3vw, 2.2rem); }
 .danger p { font-size: 1.15rem; }
 .danger a { color: var(--white); font-weight: 800; font-size: 1.3rem; }
@@ -61,18 +61,18 @@ button.cta:disabled { opacity: .7; cursor: wait; }
 .pro-form button { justify-self: start; margin-top: 0; }
 .field label { display: block; margin-bottom: .35rem; font-weight: 700; }
 .field input, .field select, .field textarea { width: 100%; min-height: 50px; padding: .7rem .8rem; border: 2px solid var(--line); border-radius: 6px; background: var(--white); color: var(--ink); font: inherit; }
-.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { outline: 3px solid var(--sky); outline-offset: 2px; }
 .pros .form-note { margin: 0; font-size: .95rem; }
 .hp { position: absolute; left: -9999px; }
 .form-status { margin: 0; }
 .form-status:empty { display: none; }
 .pros .form-status { max-width: 46rem; margin-top: 1.25rem; padding: .8rem 1rem; border-radius: 6px; font-weight: 700; }
 .form-status:focus { outline: none; }
-.form-status.is-ok { background: var(--yellow); color: var(--ink); }
-.form-status.is-error { background: var(--white); color: var(--red); }
+.form-status.is-ok { background: var(--sky); color: var(--ink); }
+.form-status.is-error { background: var(--white); color: #b3142a; }
 .pros .pro-access { margin-top: 1.5rem; font-size: 1rem; }
 .pro-access a { color: var(--white); font-weight: 700; }
-.pro-access a:focus-visible { outline-color: var(--yellow); }
+.pro-access a:focus-visible { outline-color: var(--sky); }
 @media (max-width: 800px) {
   .pro-form { grid-template-columns: 1fr; }
   h1 { font-size: clamp(2rem, 9.2vw, 4.5rem); }
