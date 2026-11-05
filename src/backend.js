@@ -201,18 +201,18 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
 
     // Fiches réelles et vérifiées, visibles sans connexion. Une liste vide garde l'app en démonstration.
     listPros() {
-      return call('/rest/v1/pros?select=id,name,category,lat,lng,phone,verified,description');
+      return call('/rest/v1/pros?select=id,name,category,lat,lng,phone,verified,description,response_minutes,insurance_verified');
     },
 
     async getMyPro() {
       const token = await validToken();
       if (!token) return null;
-      const rows = await call(`/rest/v1/pros?select=id,name,verified,rejected,category,location,phone,siret,description&user_id=eq.${userIdFromToken(token)}&limit=1`, { token });
+      const rows = await call(`/rest/v1/pros?select=id,name,verified,rejected,category,location,phone,siret,description,response_minutes,insurance_verified&user_id=eq.${userIdFromToken(token)}&limit=1`, { token });
       return rows[0] ?? null;
     },
 
     listProRequests(proId) {
-      return authed(`/rest/v1/requests?select=id,category,symptom,location,afloat,urgency_score,price_min,price_max,photo_path,contact_phone,status,created_at&pro_id=eq.${proId}&order=created_at.desc&limit=50`);
+      return authed(`/rest/v1/requests?select=id,category,symptom,location,port,afloat,urgency_score,price_min,price_max,photo_path,contact_phone,status,created_at&pro_id=eq.${proId}&order=created_at.desc&limit=50`);
     },
 
     updateProRequest(requestId, action) {
@@ -226,7 +226,7 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     saveProProfile(pro) {
       return authed('/rest/v1/rpc/pro_save_profile', { method: 'POST', body: {
         p_name: pro.name, p_category: pro.category, p_location: pro.location,
-        p_phone: pro.phone, p_siret: pro.siret, p_description: pro.description,
+        p_phone: pro.phone, p_siret: pro.siret, p_description: pro.description, p_response_minutes: pro.responseMinutes ?? null,
       } });
     },
 
@@ -287,6 +287,9 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     adminSetPro(proId, action) {
       return authed('/rest/v1/rpc/admin_set_pro', { method: 'POST', body: { p_pro_id: proId, p_action: action } });
     },
+    adminSetProInsurance(proId, verified) {
+      return authed('/rest/v1/rpc/admin_set_pro_insurance', { method: 'POST', body: { p_pro_id: proId, p_verified: verified } });
+    },
     adminListReviews() {
       return authed('/rest/v1/rpc/admin_list_reviews', { method: 'POST', body: {} });
     },
@@ -299,7 +302,7 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     },
 
     listRequests() {
-      return authed('/rest/v1/requests?select=id,pro_id,category,symptom,location,status,price_min,price_max,created_at&order=created_at.desc&limit=50');
+      return authed('/rest/v1/requests?select=id,pro_id,category,symptom,location,port,status,price_min,price_max,created_at&order=created_at.desc&limit=50');
     },
   };
 }
@@ -310,7 +313,7 @@ export function userIdFromToken(token) {
 }
 
 // Transforme le résultat du tri en ligne de la table requests.
-export function toRequestRow(result, locationId, afloat, photoPath = null, proId = null, contactPhone = null) {
+export function toRequestRow(result, locationId, afloat, photoPath = null, proId = null, contactPhone = null, port = null) {
   return {
     category: result.category.id,
     symptom: result.symptom.id,
@@ -322,5 +325,6 @@ export function toRequestRow(result, locationId, afloat, photoPath = null, proId
     photo_path: photoPath,
     pro_id: proId,
     contact_phone: contactPhone,
+    port,
   };
 }

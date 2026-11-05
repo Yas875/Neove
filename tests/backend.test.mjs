@@ -69,7 +69,7 @@ test('sans session, aucune demande ne part', async () => {
 });
 test('la ligne envoyée n’impose ni utilisateur ni statut', () => {
   const row = toRequestRow(triage('mecanique', 'bruit', true), 'nice', true);
-  assert.deepEqual(row, { category: 'mecanique', symptom: 'bruit', location: 'nice', afloat: true, urgency_score: 35, price_min: 120, price_max: 600, photo_path: null, pro_id: null, contact_phone: null });
+  assert.deepEqual(row, { category: 'mecanique', symptom: 'bruit', location: 'nice', afloat: true, urgency_score: 35, price_min: 120, price_max: 600, photo_path: null, pro_id: null, contact_phone: null, port: null });
 });
 
 const jwt = `a.${btoa(JSON.stringify({ sub: '11111111-1111-4111-8111-111111111111' }))}.c`;
@@ -137,4 +137,9 @@ test('la case de signature est transmise, et reste décochée par défaut', asyn
   await backend.submitReview('r', 5, '', true);
   assert.equal(JSON.parse(calls[1].body).p_show_author, false);
   assert.equal(JSON.parse(calls[2].body).p_show_author, true);
+});
+test('le port choisi part avec la demande, et reste facultatif', () => {
+  const r = triage('mecanique', 'bruit', true);
+  assert.equal(toRequestRow(r, 'antibes', true, null, null, null, 'Port Vauban').port, 'Port Vauban');
+  assert.equal(toRequestRow(r, 'carros', true).port, null);
 });

@@ -25,8 +25,8 @@ const storage = safeStorage();
 const backend = createBackend({ url: SUPABASE_URL, key: SUPABASE_KEY, fetch: (...a) => window.fetch(...a), storage });
 
 function saveDraft() {
-  const { category, symptom, location: place, aFlot, pro, photoPath, phone } = state;
-  try { storage.setItem(DRAFT_KEY, JSON.stringify({ category, symptom, location: place, aFlot, pro, photoPath, phone })); } catch { /* facultatif */ }
+  const { category, symptom, location: place, port, aFlot, pro, photoPath, phone } = state;
+  try { storage.setItem(DRAFT_KEY, JSON.stringify({ category, symptom, location: place, port, aFlot, pro, photoPath, phone })); } catch { /* facultatif */ }
 }
 function clearDraft() { try { storage.removeItem(DRAFT_KEY); } catch { /* rien à effacer */ } }
 function restoreDraft() {
@@ -36,7 +36,7 @@ function restoreDraft() {
     triage(d.category, d.symptom, d.aFlot);
     const pro = d.pro;
     if (!pro?.id || !pro.name || pro.category !== d.category || !LOCATIONS.some((l) => l.id === d.location)) throw new Error('Brouillon invalide');
-    Object.assign(state, { category: d.category, symptom: d.symptom, location: d.location, aFlot: Boolean(d.aFlot), pro, photoPath: typeof d.photoPath === 'string' ? d.photoPath : null, phone: typeof d.phone === 'string' ? d.phone : '' });
+    Object.assign(state, { category: d.category, symptom: d.symptom, location: d.location, port: typeof d.port === 'string' ? d.port : null, aFlot: Boolean(d.aFlot), pro, photoPath: typeof d.photoPath === 'string' ? d.photoPath : null, phone: typeof d.phone === 'string' ? d.phone : '' });
     return true;
   } catch { clearDraft(); return false; }
 }
@@ -47,7 +47,7 @@ async function submitRequest() {
   go('envoi');
   try {
     const result = triage(state.category, state.symptom, state.aFlot);
-    await backend.createRequest(toRequestRow(result, state.location, state.aFlot, state.photoPath, state.pro.real ? state.pro.id : null, state.pro.real ? state.phone : null));
+    await backend.createRequest(toRequestRow(result, state.location, state.aFlot, state.photoPath, state.pro.real ? state.pro.id : null, state.pro.real ? state.phone : null, state.port));
     clearDraft();
     state.saving = false;
     go(state.pro.real ? 'envoyee' : 'suivi');
@@ -63,7 +63,7 @@ function resetFlow() {
   if (state.photo) URL.revokeObjectURL(state.photo);
   Object.assign(state, {
     photo: null, photoBlob: null, photoPath: null, photoError: null, suggestion: null, analysisError: null,
-    category: null, symptom: null, location: null, aFlot: true, pro: null, step: 0, saveError: null, phone: '',
+    category: null, symptom: null, location: null, port: null, aFlot: true, pro: null, step: 0, saveError: null, phone: '',
   });
 }
 
@@ -183,6 +183,7 @@ function panneScreen() {
   state.location ??= state.profile?.home_location ?? null;
   const category = CATEGORIES.find((c) => c.id === state.category);
   const ready = state.symptom && state.location;
+  const place = LOCATIONS.find((l) => l.id === state.location);
   return [
     header('Décrivez la panne', 'photo'),
     h('main', {},
@@ -197,8 +198,13 @@ function panneScreen() {
       }))),
       h('h2', {}, 'Où est le bateau ?'),
       h('div', { class: 'choices' }, LOCATIONS.map((l) => choice(l.label, l.id === state.location, () => {
+        if (state.location !== l.id) state.port = null;
         state.location = l.id; render();
       }))),
+      place?.ports && h('h2', {}, 'Quel port ?'),
+      place?.ports && h('div', { class: 'choices' },
+        place.ports.map((name) => choice(name, state.port === name, () => { state.port = name; render(); })),
+        choice('Autre endroit', !state.port, () => { state.port = null; render(); })),
       h('h2', {}, 'Est-il à flot ?'),
       h('div', { class: 'choices' },
         choice('À flot', state.aFlot, () => { state.aFlot = true; render(); }),
@@ -246,6 +252,7 @@ function prosScreen() {
       !real.length && h('p', { class: 'demo' }, 'Intervenants fictifs : cette version sert de démonstration.'),
       h('ul', { class: 'pros' }, pros.map((p) => h('li', {},
         h('div', {}, h('strong', {}, p.name), h('span', {}, p.distance < 1 ? 'Moins de 1 km à vol d’oiseau' : `${p.distance.toFixed(1).replace('.', ',')} km à vol d’oiseau`),
+          p.real && trustBadges(p),
           p.real && h('button', { class: 'inline-link', type: 'button', onclick: () => openPublicPro(p) }, ratingLabel(state.ratings.filter((x) => x.pro_id === p.id)))),
         h('button', { class: 'pick', type: 'button', onclick: () => {
           state.pro = p; saveDraft();
@@ -355,7 +362,7 @@ function proRequestScreen() {
       state.proPhoto && h('img', { class: 'pro-photo', src: state.proPhoto, alt: 'Photo envoyée par le client' }),
       h('dl', { class: 'facts' },
         h('dt', {}, 'État'), h('dd', {}, STATUS_LABELS[r.status] ?? r.status),
-        h('dt', {}, 'Lieu'), h('dd', {}, `${d.place}, ${r.afloat ? 'à flot' : 'à terre'}`),
+        h('dt', {}, 'Lieu'), h('dd', {}, `${r.port ?? d.place}, ${r.afloat ? 'à flot' : 'à terre'}`),
         h('dt', {}, 'Urgence'), h('dd', {}, urgencyLevel(r.urgency_score).label),
         h('dt', {}, 'Repère de prix affiché au client'), h('dd', {}, `${r.price_min} à ${r.price_max} €`),
         r.contact_phone && r.status !== 'refusee' && [h('dt', {}, 'Téléphone du client'), h('dd', {}, h('a', { href: `tel:${r.contact_phone.replace(/[^+\d]/g, '')}` }, r.contact_phone))]),
@@ -699,7 +706,7 @@ function proProfileScreen() {
         if (!/^\d{14}$/.test(siret)) { state.formError = 'Le SIRET doit contenir 14 chiffres.'; render(); return; }
         runForm(async () => {
           state.myPro = await backend.saveProProfile({
-            name: f.name, category: f.category, location: f.location, phone: f.phone, siret, description: f.description,
+            name: f.name, category: f.category, location: f.location, phone: f.phone, siret, description: f.description, responseMinutes: f.response_minutes ? Number(f.response_minutes) : null,
           });
           state.formInfo = state.myPro.verified ? 'Fiche enregistrée.' : 'Fiche enregistrée. Elle attend la vérification de Seravia.';
         });
@@ -709,8 +716,9 @@ function proProfileScreen() {
       selectField('Ville ou port', 'location', LOCATIONS.map((l) => [l.id, l.label]), p.location),
       field('Téléphone professionnel', 'phone', { type: 'tel', required: true, minlength: '6', maxlength: '30', autocomplete: 'tel' }, p.phone),
       field('SIRET', 'siret', { required: true, inputmode: 'numeric', maxlength: '20' }, p.siret),
+      selectFieldOptional('Délai de réponse auquel vous vous engagez', 'response_minutes', Object.entries(RESPONSE_LABELS).map(([v, text]) => [v, `Sous ${text}`]), p.response_minutes == null ? '' : String(p.response_minutes)),
       field('Présentation (facultatif)', 'description', { type: 'textarea', maxlength: '500' }, p.description),
-      h('p', { class: 'note' }, 'Le nom, le métier, le téléphone et la présentation sont affichés aux clients une fois la fiche vérifiée.'),
+      h('p', { class: 'note' }, 'Le nom, le métier, le téléphone, le délai et la présentation sont affichés aux clients une fois la fiche vérifiée. N’annoncez qu’un délai que vous pouvez tenir.'),
       submit('Enregistrer ma fiche', 'Enregistrement'))),
   ];
 }
@@ -746,7 +754,13 @@ function adminProsScreen() {
           ? h('p', {}, `SIRET ${p.siret} : `, h('a', { href: `https://annuaire-entreprises.data.gouv.fr/etablissement/${encodeURIComponent(p.siret)}`, target: '_blank', rel: 'noopener noreferrer' }, 'vérifier l’entreprise'))
           : h('p', { class: 'note' }, 'Aucun SIRET renseigné.'),
         p.description && h('p', { class: 'note' }, p.description),
+        h('p', { class: 'note' }, `Délai annoncé : ${RESPONSE_LABELS[p.response_minutes] ?? 'aucun'}. Assurance : ${p.insurance_verified ? 'contrôlée' : 'non contrôlée'}.`),
         h('div', { class: 'admin-actions' },
+          h('button', { class: 'pick', type: 'button', disabled: state.busy, onclick: () => runForm(async () => {
+            await backend.adminSetProInsurance(p.id, !p.insurance_verified);
+            state.adminPros = await backend.adminListPros();
+            state.formInfo = `${p.name} : assurance ${p.insurance_verified ? 'non contrôlée' : 'contrôlée'}.`;
+          }) }, p.insurance_verified ? 'Retirer « assurance contrôlée »' : 'Assurance contrôlée'),
           !p.verified && act(p, 'valider', 'fiche validée'),
           !p.verified && !p.rejected && act(p, 'refuser', 'fiche refusée'),
           p.verified && act(p, 'retirer', 'validation retirée')))))),
@@ -801,6 +815,14 @@ function avatar(path, size = '') {
   if (!path) return fallback();
   const img = h('img', { class: `avatar ${size}`, src: avatarUrl(path), alt: '', loading: 'lazy', onerror: () => img.replaceWith(fallback()) });
   return img;
+}
+const RESPONSE_LABELS = { 15: '15 minutes', 30: '30 minutes', 60: '1 heure', 120: '2 heures' };
+// Chaque mention dit exactement ce qui a été contrôlé, et par qui.
+function trustBadges(p) {
+  return h('ul', { class: 'trust' },
+    p.verified && h('li', {}, 'Entreprise vérifiée par Seravia'),
+    p.insurance_verified && h('li', {}, 'Assurance contrôlée par Seravia'),
+    RESPONSE_LABELS[p.response_minutes] && h('li', {}, `Répond sous ${RESPONSE_LABELS[p.response_minutes]}, selon l’intervenant`));
 }
 function reviewItem(r, extra) {
   return h('li', {},
@@ -893,6 +915,7 @@ function publicProScreen() {
     h('main', {},
       messages(),
       p.description && h('p', { class: 'lead' }, p.description),
+      trustBadges(p),
       !list && !state.formError && h('p', { class: 'lead', role: 'status' }, 'Chargement.'),
       list?.length === 0 && h('p', { class: 'note' }, 'Aucun avis pour l’instant.'),
       list?.length > 0 && h('p', { class: 'rating-big' }, ratingLabel(list)),
@@ -943,7 +966,7 @@ function requestsScreen() {
         const d = describe(r);
         return h('li', {}, h('div', {},
           h('strong', {}, d.symptom),
-          h('span', {}, `${d.place}, ${dateFormat.format(new Date(r.created_at))}`),
+          h('span', {}, `${r.port ?? d.place}, ${dateFormat.format(new Date(r.created_at))}`),
           h('span', {}, `${STATUS_LABELS[r.status] ?? r.status}, ${r.price_min} à ${r.price_max} €`),
           r.status === 'terminee' && r.pro_id && (state.reviewed.includes(r.id)
             ? h('span', {}, 'Avis envoyé')
