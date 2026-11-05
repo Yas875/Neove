@@ -441,14 +441,29 @@ function figure(markup) {
   return el;
 }
 function roleStage(selected, onpick) {
-  const enter = !state.stageEntered;
-  state.stageEntered = true;
   const role = (kind, label, markup) => h('button', {
     class: `role role-${kind}${selected === kind ? ' is-on' : ''}${selected && selected !== kind ? ' is-off' : ''}`,
     type: 'button', onclick: () => onpick(kind), ...(selected ? { 'aria-pressed': String(selected === kind) } : {}),
   }, figure(markup), h('span', { class: 'role-label' }, label));
-  return h('div', { class: `stage${enter ? ' stage-enter' : ''}`, role: 'group', 'aria-label': 'Vous êtes' },
+  const stage = h('div', { class: `stage ${state.stageEntered ? 'stage-play' : 'stage-wait'}`, role: 'group', 'aria-label': 'Vous êtes' },
     role('client', 'Client', CLIENT_FIGURE), role('pro', 'Intervenant', PRO_FIGURE));
+  if (!state.stageEntered) playWhenCentered(stage);
+  return stage;
+}
+// L'animation démarre quand les personnages atteignent à peu près le milieu de l'écran.
+function playWhenCentered(stage) {
+  const play = () => {
+    state.stageEntered = true;
+    stage.classList.replace('stage-wait', 'stage-enter');
+    stage.classList.add('stage-play');
+  };
+  if (!('IntersectionObserver' in window)) { play(); return; }
+  const observer = new IntersectionObserver((entries) => {
+    if (!entries.some((e) => e.isIntersecting)) return;
+    observer.disconnect();
+    play();
+  }, { rootMargin: '-40% 0px -40% 0px' });
+  observer.observe(stage);
 }
 
 const PASSWORD_ATTRS = { type: 'password', required: true, minlength: '8', maxlength: '72', autocomplete: 'new-password' };
