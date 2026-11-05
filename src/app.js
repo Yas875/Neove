@@ -115,7 +115,7 @@ function h(tag, props = {}, ...children) {
   el.append(...children.flat().filter((c) => c != null && c !== false));
   return el;
 }
-const go = (screen) => { Object.assign(state, { form: {}, formError: null, formInfo: null, busy: false }); state.screen = screen; render(); window.scrollTo(0, 0); document.querySelector('h1')?.focus(); };
+const go = (screen) => { Object.assign(state, { form: {}, formError: null, formInfo: null, busy: false, stageEntered: false }); state.screen = screen; render(); window.scrollTo(0, 0); document.querySelector('h1')?.focus(); };
 const brand = () => h('span', { class: 'brand' }, h('img', { src: 'icon-192.png', alt: '', width: '32', height: '32' }), 'Seravia');
 const accountNav = () => h('nav', { class: 'top-nav', 'aria-label': 'Compte' }, backend.signedIn
   ? h('button', { class: 'nav-link', type: 'button', onclick: () => go('compte') }, 'Mon compte')
@@ -158,12 +158,13 @@ function photoScreen() {
         ? [primary('Analyser la photo', startAnalysis),
           h('button', { class: 'link', type: 'button', onclick: () => { state.suggestion = null; go('panne'); } }, 'Continuer sans analyse')]
         : primary('Continuer sans photo', () => go('panne')),
+      !backend.signedIn && !state.photo && [h('h2', { class: 'stage-title' }, 'Créez votre compte'), roleStage(null, openSignup)],
       !state.photo && h('ol', { class: 'howto' },
         h('li', {}, h('strong', {}, 'Montrez la panne'), h('span', {}, 'Une photo, ou quelques questions si vous préférez.')),
         h('li', {}, h('strong', {}, 'Voyez l’urgence'), h('span', {}, 'Avec un premier repère de prix, à confirmer après diagnostic.')),
         h('li', {}, h('strong', {}, 'Trouvez un intervenant'), h('span', {}, 'Du plus proche au plus éloigné de votre bateau.'))),
       !state.photo && h('p', { class: 'sos' }, 'En cas de danger, appelez le ', h('a', { href: 'tel:196' }, '196'), ' en mer ou le ', h('a', { href: 'tel:112' }, '112'), ' à quai.'),
-      !backend.signedIn && h('button', { class: 'link', type: 'button', onclick: () => openSignup('pro') }, 'Vous êtes intervenant ? Créer un compte')),
+      ),
   ];
 }
 
@@ -351,7 +352,7 @@ function proRequestScreen() {
     header(d.symptom, 'pro'),
     h('main', {},
       state.proError && h('p', { class: 'error', role: 'alert' }, state.proError),
-      state.proPhoto && h('img', { class: 'pro-photo', src: state.proPhoto, alt: 'Photo envoyée par le plaisancier' }),
+      state.proPhoto && h('img', { class: 'pro-photo', src: state.proPhoto, alt: 'Photo envoyée par le client' }),
       h('dl', { class: 'facts' },
         h('dt', {}, 'État'), h('dd', {}, STATUS_LABELS[r.status] ?? r.status),
         h('dt', {}, 'Lieu'), h('dd', {}, `${d.place}, ${r.afloat ? 'à flot' : 'à terre'}`),
@@ -370,7 +371,7 @@ function deleteAccountScreen() {
     h('main', {},
       state.deleteError && h('p', { class: 'error', role: 'alert' }, state.deleteError),
       h('p', { class: 'lead' }, 'Votre compte, votre profil, vos demandes, vos avis et vos photos seront supprimés définitivement. Cette action ne peut pas être annulée.'),
-      state.myPro && h('p', { class: 'note' }, 'Votre fiche d’intervenant ne sera plus proposée aux plaisanciers.'),
+      state.myPro && h('p', { class: 'note' }, 'Votre fiche d’intervenant ne sera plus proposée aux clients.'),
       h('button', { class: 'primary danger-action', type: 'button', disabled: state.deleting, onclick: async () => {
         state.deleting = true; state.deleteError = null; render();
         try {
@@ -431,6 +432,25 @@ async function runForm(action) {
   state.busy = false; render();
 }
 const submit = (label, busyLabel) => h('button', { class: 'primary', type: 'submit', disabled: state.busy }, state.busy ? busyLabel : label);
+// Les deux personnages du logo, redessinés pour rester nets et animer leur poignée de main.
+const CLIENT_FIGURE = `<svg viewBox="60 90 218 330" aria-hidden="true"><g class="fig-body"><circle cx="131" cy="155" r="52"/><path d="M73 408V262c0-26 20-44 46-44s38 12 50 34v156z"/></g><g class="fig-arm fig-arm-left"><path class="fig-gap" d="M166 256l92 82"/><path class="fig-limb" d="M166 256l92 82"/></g></svg>`;
+const PRO_FIGURE = `<svg viewBox="276 90 169 330" aria-hidden="true"><g class="fig-body"><path d="M325 152a52 50 0 0 1 104 0z"/><rect x="318" y="150" width="116" height="14" rx="7"/><path class="fig-cut" d="M379 104l-7 32"/><path d="M332 172h88a44 44 0 0 1-88 0z"/><path fill-rule="evenodd" d="M334 228h20l12 66h18l12-66h20c20 0 34 18 34 40v137H306V268c0-22 10-40 28-40zm-4 136v22h44v-22zm56 0v22h34v-22z"/></g><g class="fig-arm fig-arm-right"><path class="fig-gap" d="M420 322l-124 24"/><path class="fig-limb" d="M420 322l-124 24"/></g></svg>`;
+function figure(markup) {
+  const el = h('span', { class: 'figure' });
+  el.innerHTML = markup; // Dessins fixes écrits ici, sans aucune donnée saisie.
+  return el;
+}
+function roleStage(selected, onpick) {
+  const enter = !state.stageEntered;
+  state.stageEntered = true;
+  const role = (kind, label, markup) => h('button', {
+    class: `role role-${kind}${selected === kind ? ' is-on' : ''}${selected && selected !== kind ? ' is-off' : ''}`,
+    type: 'button', onclick: () => onpick(kind), ...(selected ? { 'aria-pressed': String(selected === kind) } : {}),
+  }, figure(markup), h('span', { class: 'role-label' }, label));
+  return h('div', { class: `stage${enter ? ' stage-enter' : ''}`, role: 'group', 'aria-label': 'Vous êtes' },
+    role('client', 'Client', CLIENT_FIGURE), role('pro', 'Intervenant', PRO_FIGURE));
+}
+
 const PASSWORD_ATTRS = { type: 'password', required: true, minlength: '8', maxlength: '72', autocomplete: 'new-password' };
 
 function openLogin() {
@@ -481,9 +501,7 @@ function signupScreen() {
     h('main', {},
       messages(),
       h('h2', {}, 'Vous êtes'),
-      h('div', { class: 'choices' },
-        choice('Plaisancier', !pro, () => { state.signupKind = 'client'; render(); }),
-        choice('Intervenant', pro, () => { state.signupKind = 'pro'; render(); })),
+      roleStage(state.signupKind, (kind) => { state.signupKind = kind; render(); }),
       h('form', { onsubmit: (e) => {
         e.preventDefault();
         const password = e.target.elements.password.value;

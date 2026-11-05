@@ -117,3 +117,33 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .account-id .note { margin: 0; }
 .check { display: flex; align-items: flex-start; gap: .6rem; margin-top: 1rem; font-size: .95rem; cursor: pointer; }
 .check input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.stage-title { margin-top: 2rem; }
+.stage { display: grid; grid-template-columns: 1fr 1fr; margin-top: .75rem; }
+.role { display: grid; justify-items: center; gap: .6rem; min-height: 44px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; }
+.figure { display: block; height: 132px; }
+.role-client .figure { justify-self: end; }
+.role-pro .figure { justify-self: start; }
+.figure svg { display: block; height: 100%; width: auto; overflow: visible; fill: var(--white); }
+.fig-limb, .fig-gap { fill: none; stroke-linecap: round; }
+.fig-limb { stroke: var(--white); stroke-width: 42; }
+.fig-gap { stroke: var(--night); stroke-width: 54; }
+.fig-arm-left .fig-gap { display: none; }
+.fig-cut { fill: none; stroke: var(--night); stroke-width: 9; stroke-linecap: round; }
+.role-label { font-weight: 700; }
+.role.is-on .role-label { color: var(--accent); }
+.role.is-off { opacity: .4; }
+.fig-arm { transform-box: view-box; }
+.fig-arm-left { transform-origin: 166px 256px; }
+.fig-arm-right { transform-origin: 420px 322px; }
+@media (prefers-reduced-motion: no-preference) {
+  .fig-arm-left { animation: shake-left 5s ease-in-out infinite; }
+  .fig-arm-right { animation: shake-right 5s ease-in-out infinite; }
+  .stage-enter .role-client .figure { animation: come-left .7s cubic-bezier(.2, .8, .2, 1) both; }
+  .stage-enter .role-pro .figure { animation: come-right .7s cubic-bezier(.2, .8, .2, 1) both; }
+  .role.is-on .figure { animation: hop .45s ease-out; }
+}
+@keyframes come-left { from { opacity: 0; transform: translateX(-40px); } }
+@keyframes come-right { from { opacity: 0; transform: translateX(40px); } }
+@keyframes hop { 40% { transform: translateY(-10px); } }
+@keyframes shake-left { 0%, 14%, 38%, 100% { transform: rotate(0); } 20% { transform: rotate(-5deg); } 26% { transform: rotate(4deg); } 32% { transform: rotate(-3deg); } }
+@keyframes shake-right { 0%, 14%, 38%, 100% { transform: rotate(0); } 20% { transform: rotate(4deg); } 26% { transform: rotate(-3.2deg); } 32% { transform: rotate(2.4deg); } }
