@@ -143,3 +143,8 @@ test('le port choisi part avec la demande, et reste facultatif', () => {
   assert.equal(toRequestRow(r, 'antibes', true, null, null, null, 'Port Vauban').port, 'Port Vauban');
   assert.equal(toRequestRow(r, 'carros', true).port, null);
 });
+test('le lien de confirmation revient vers l’adresse de l’app', async () => {
+  const { backend, calls } = setup([{ status: 200, body: { id: 'u' } }]);
+  await backend.signUp('a@b.fr', 'motdepasse', 'https://app.test/Neove/');
+  assert.match(calls[0].url, /signup\?redirect_to=https%3A%2F%2Fapp\.test%2FNeove%2F$/);
+});
