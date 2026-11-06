@@ -89,9 +89,10 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     get email() { return memory?.email ?? null; },
     get signedIn() { return Boolean(memory); },
 
-    async signUp(email, password) {
+    async signUp(email, password, redirectTo) {
       try {
-        const data = await call('/auth/v1/signup', { method: 'POST', body: { email, password } });
+        const query = redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : '';
+        const data = await call(`/auth/v1/signup${query}`, { method: 'POST', body: { email, password } });
         if (!data?.access_token) return { confirm: true };
         startSession(data, email);
         return { signedIn: true };

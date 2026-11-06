@@ -530,7 +530,7 @@ function signupScreen() {
         runForm(async () => {
           const email = state.form.email.trim();
           const name = state.form.full_name.trim();
-          const outcome = await backend.signUp(email, password);
+          const outcome = await backend.signUp(email, password, location.origin + location.pathname);
           if (outcome.confirm) {
             state.notice = 'Votre compte est créé. Confirmez votre adresse avec le lien reçu par e-mail, puis connectez-vous.';
             state.loginTitle = '';
