@@ -148,3 +148,14 @@ test('le lien de confirmation revient vers l’adresse de l’app', async () => 
   await backend.signUp('a@b.fr', 'motdepasse', 'https://app.test/Neove/');
   assert.match(calls[0].url, /signup\?redirect_to=https%3A%2F%2Fapp\.test%2FNeove%2F$/);
 });
+test('le choix fait à l’inscription part avec le compte et se relit après confirmation', async () => {
+  const { backend, calls } = setup([{ status: 200, body: session }, { status: 200, body: { user_metadata: { full_name: ' Ana B ', account_kind: 'pro' } } }]);
+  await backend.signUp('a@b.fr', 'motdepasse', 'https://app.test/', { full_name: 'Ana B', account_kind: 'pro' });
+  assert.deepEqual(JSON.parse(calls[0].body).data, { full_name: 'Ana B', account_kind: 'pro' });
+  assert.deepEqual(await backend.getSignupIntent(), { fullName: 'Ana B', kind: 'pro' });
+});
+test('un type de compte inconnu reste un compte client', async () => {
+  const { backend } = setup([{ status: 200, body: session }, { status: 200, body: { user_metadata: { account_kind: 'admin' } } }]);
+  await backend.signIn('a@b.fr', 'x');
+  assert.equal((await backend.getSignupIntent()).kind, 'client');
+});

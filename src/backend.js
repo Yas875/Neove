@@ -89,10 +89,10 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
     get email() { return memory?.email ?? null; },
     get signedIn() { return Boolean(memory); },
 
-    async signUp(email, password, redirectTo) {
+    async signUp(email, password, redirectTo, intent = {}) {
       try {
         const query = redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : '';
-        const data = await call(`/auth/v1/signup${query}`, { method: 'POST', body: { email, password } });
+        const data = await call(`/auth/v1/signup${query}`, { method: 'POST', body: { email, password, data: intent } });
         if (!data?.access_token) return { confirm: true };
         startSession(data, email);
         return { signedIn: true };
@@ -126,6 +126,16 @@ export function createBackend({ url, key, fetch: fetcher, storage, now = () => D
         if (error.code === 'weak_password' || error.code === 'same_password') throw new BackendError('Choisissez un mot de passe différent et plus long.', error.status, error.code);
         throw error;
       }
+    },
+
+    // Ce que la personne a indiqué à l'inscription, retrouvé après la confirmation de son e-mail.
+    async getSignupIntent() {
+      const user = await authed('/auth/v1/user');
+      const meta = user?.user_metadata ?? {};
+      return {
+        fullName: typeof meta.full_name === 'string' ? meta.full_name.trim().slice(0, 100) : '',
+        kind: meta.account_kind === 'pro' ? 'pro' : 'client',
+      };
     },
 
     async getProfile() {

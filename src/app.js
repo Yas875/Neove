@@ -483,9 +483,19 @@ function openSignup(kind) {
   state.signupKind = kind; state.loginBack = 'photo'; state.afterLogin = null;
   go('inscription');
 }
+// À la première connexion après une inscription confirmée par e-mail : le profil n'existe pas encore.
+async function applySignupIntent() {
+  if (state.profile || !backend.signedIn) return;
+  try {
+    const { fullName, kind } = await backend.getSignupIntent();
+    if (fullName) state.profile = await backend.saveProfile({ full_name: fullName });
+    if (kind === 'pro') state.signupKind = 'pro';
+  } catch { /* Le compte reste utilisable : la personne pourra compléter son profil. */ }
+}
 async function afterAuth() {
   state.loginError = null; state.notice = null;
   await loadMyPro();
+  await applySignupIntent();
   const next = state.afterLogin;
   state.afterLogin = null;
   if (state.signupKind === 'pro' && !state.myPro) { state.signupKind = 'client'; go('pro-fiche'); return; }
@@ -530,14 +540,13 @@ function signupScreen() {
         runForm(async () => {
           const email = state.form.email.trim();
           const name = state.form.full_name.trim();
-          const outcome = await backend.signUp(email, password, location.origin + location.pathname);
+          const outcome = await backend.signUp(email, password, location.origin + location.pathname, { full_name: name, account_kind: state.signupKind });
           if (outcome.confirm) {
             state.notice = 'Votre compte est créé. Confirmez votre adresse avec le lien reçu par e-mail, puis connectez-vous.';
             state.loginTitle = '';
             go('connexion');
             return;
           }
-          await backend.saveProfile({ full_name: name }).catch(() => {});
           await afterAuth();
         });
       } },
@@ -996,7 +1005,7 @@ async function start() {
     history.replaceState(null, '', location.pathname + location.search);
     let outcome;
     try { outcome = await backend.consumeRedirect(hash); } catch (error) { outcome = { error: error.message }; }
-    if (outcome.signedIn) await loadMyPro();
+    if (outcome.signedIn) { await loadMyPro(); await applySignupIntent(); }
     if (outcome.recovery) { go('nouveau-mdp'); return; }
     if (outcome.signedIn && restoreDraft()) { submitRequest(); return; }
     if (outcome.signedIn) {
@@ -1006,6 +1015,7 @@ async function start() {
         runAnalysis();
         return;
       }
+      if (state.signupKind === 'pro' && !state.myPro) { state.signupKind = 'client'; go('pro-fiche'); return; }
       go('compte'); return;
     }
     if (outcome.error) {
